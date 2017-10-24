@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports Microsoft.CodeAnalysis.Structure
 Imports Microsoft.CodeAnalysis.VisualBasic.Structure
@@ -34,43 +34,43 @@ End Class
         Public Async Function WithAttributes() As Task
             Dim code = "
 Class C
-    {|hint:{|collapse:<Foo>
+    {|hint:{|textspan:<Goo>
     |}Public Shared Operator $$=(a As C, b As C) As Boolean|}
 End Class
 "
 
             Await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
+                Region("textspan", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.MetadataAsSource)>
         Public Async Function WithCommentsAndAttributes() As Task
             Dim code = "
 Class C
-    {|hint:{|collapse:' Summary:
+    {|hint:{|textspan:' Summary:
     '     This is a summary.
-    <Foo>
+    <Goo>
     |}Operator $$=(a As C, b As C) As Boolean|}
 End Class
 "
 
             Await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
+                Region("textspan", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.MetadataAsSource)>
         Public Async Function WithCommentsAttributesAndModifiers() As Task
             Dim code = "
 Class C
-    {|hint:{|collapse:' Summary:
+    {|hint:{|textspan:' Summary:
     '     This is a summary.
-    <Foo>
+    <Goo>
     |}Public Shared Operator $$=(a As C, b As C) As Boolean|}
 End Class
 "
 
             Await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
+                Region("textspan", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
         End Function
     End Class
 End Namespace

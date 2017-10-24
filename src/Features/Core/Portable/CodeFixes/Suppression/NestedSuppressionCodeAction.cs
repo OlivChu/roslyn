@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using Microsoft.CodeAnalysis.CodeActions;
 
@@ -6,14 +6,15 @@ namespace Microsoft.CodeAnalysis.CodeFixes.Suppression
 {
     internal abstract class NestedSuppressionCodeAction : CodeAction
     {
-        private readonly string _title;
-
         protected NestedSuppressionCodeAction(string title)
         {
-            _title = title;
+            Title = title;
         }
+        
+        // Put suppressions at the end of everything.
+        internal override CodeActionPriority Priority => CodeActionPriority.None;
 
-        public sealed override string Title => _title;
+        public sealed override string Title { get; }
 
         protected abstract string DiagnosticIdForEquivalenceKey { get; }
 

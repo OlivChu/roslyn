@@ -48,7 +48,6 @@ namespace Microsoft.CodeAnalysis
         System_CLSCompliantAttribute__ctor,
         System_FlagsAttribute__ctor,
         System_Guid__ctor,
-        System_Guid__Parse,
 
         System_Type__GetTypeFromCLSID,
         System_Type__GetTypeFromHandle,
@@ -415,7 +414,15 @@ namespace Microsoft.CodeAnalysis
 
         System_String__Format_IFormatProvider,
 
-        Microsoft_CodeAnalysis_Runtime_Instrumentation__CreatePayload,
+        Microsoft_CodeAnalysis_Runtime_Instrumentation__CreatePayloadForMethodsSpanningSingleFile,
+        Microsoft_CodeAnalysis_Runtime_Instrumentation__CreatePayloadForMethodsSpanningMultipleFiles,
+
+        System_Runtime_CompilerServices_ReferenceAssemblyAttribute__ctor,
+        System_Runtime_CompilerServices_IsReadOnlyAttribute__ctor,
+        System_Runtime_CompilerServices_IsByRefLikeAttribute__ctor,
+
+        System_ObsoleteAttribute__ctor,
+        System_Span_T__ctor,
 
         Count
     }

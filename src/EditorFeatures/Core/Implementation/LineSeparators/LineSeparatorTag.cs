@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Windows;
@@ -34,16 +34,17 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.LineSeparators
         {
             Initialize(view);
 
-            var border = new Border();
-            border.BorderBrush = _graphicsTagBrush;
-            border.BorderThickness = new Thickness(0, 0, 0, bottom: 1);
-            border.Height = 1;
-            border.Width = view.ViewportWidth;
-
-            EventHandler viewportWidthChangedHandler = (s, e) =>
+            var border = new Border()
+            {
+                BorderBrush = _graphicsTagBrush,
+                BorderThickness = new Thickness(0, 0, 0, bottom: 1),
+                Height = 1,
+                Width = view.ViewportWidth
+            };
+            void viewportWidthChangedHandler(object s, EventArgs e)
             {
                 border.Width = view.ViewportWidth;
-            };
+            }
 
             view.ViewportWidthChanged += viewportWidthChangedHandler;
 

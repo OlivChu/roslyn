@@ -1,9 +1,10 @@
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
-using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Shared.Utilities;
 using Roslyn.Utilities;
 
@@ -65,12 +66,6 @@ namespace Microsoft.CodeAnalysis.CodeFixes
             FixAllContext.DiagnosticProvider fixAllDiagnosticProvider)
         {
             Contract.ThrowIfNull(project);
-
-            if (codeFixProvider == null)
-            {
-                throw new ArgumentNullException(nameof(codeFixProvider));
-            }
-
             if (diagnosticIds == null)
             {
                 throw new ArgumentNullException(nameof(diagnosticIds));
@@ -81,19 +76,14 @@ namespace Microsoft.CodeAnalysis.CodeFixes
                 throw new ArgumentException(WorkspacesResources.Supplied_diagnostic_cannot_be_null, nameof(diagnosticIds));
             }
 
-            if (fixAllDiagnosticProvider == null)
-            {
-                throw new ArgumentNullException(nameof(fixAllDiagnosticProvider));
-            }
-
             this.FixAllProvider = fixAllProvider;
             this.Document = document;
             this.Project = project;
-            this.CodeFixProvider = codeFixProvider;
+            this.CodeFixProvider = codeFixProvider ?? throw new ArgumentNullException(nameof(codeFixProvider));
             this.Scope = scope;
             this.CodeActionEquivalenceKey = codeActionEquivalenceKey;
             this.DiagnosticIds = ImmutableHashSet.CreateRange(diagnosticIds);
-            this.DiagnosticProvider = fixAllDiagnosticProvider;
+            this.DiagnosticProvider = fixAllDiagnosticProvider ?? throw new ArgumentNullException(nameof(fixAllDiagnosticProvider));
         }
 
         internal bool IsFixMultiple => this.DiagnosticProvider.IsFixMultiple;
@@ -116,54 +106,6 @@ namespace Microsoft.CodeAnalysis.CodeFixes
             IProgressTracker progressTracker, CancellationToken cancellationToken)
         {
             return new FixAllContext(this, progressTracker, cancellationToken);
-        }
-
-        internal static FixAllState Create(
-            FixAllProvider fixAllProvider,
-            Document document,
-            FixAllProviderInfo fixAllProviderInfo,
-            CodeFixProvider originalFixProvider,
-            IEnumerable<Diagnostic> originalFixDiagnostics,
-            Func<Document, ImmutableHashSet<string>, CancellationToken, Task<IEnumerable<Diagnostic>>> getDocumentDiagnosticsAsync,
-            Func<Project, bool, ImmutableHashSet<string>, CancellationToken, Task<IEnumerable<Diagnostic>>> getProjectDiagnosticsAsync)
-        {
-            var diagnosticIds = GetFixAllDiagnosticIds(fixAllProviderInfo, originalFixDiagnostics).ToImmutableHashSet();
-            var diagnosticProvider = new FixAllDiagnosticProvider(diagnosticIds, getDocumentDiagnosticsAsync, getProjectDiagnosticsAsync);
-            return new FixAllState(
-                fixAllProvider: fixAllProvider,
-                document: document,
-                codeFixProvider: originalFixProvider,
-                scope: FixAllScope.Document,
-                codeActionEquivalenceKey: null,
-                diagnosticIds: diagnosticIds,
-                fixAllDiagnosticProvider: diagnosticProvider);
-        }
-
-        internal static FixAllState Create(
-            FixAllProvider fixAllProvider,
-            Project project,
-            FixAllProviderInfo fixAllProviderInfo,
-            CodeFixProvider originalFixProvider,
-            IEnumerable<Diagnostic> originalFixDiagnostics,
-            Func<Document, ImmutableHashSet<string>, CancellationToken, Task<IEnumerable<Diagnostic>>> getDocumentDiagnosticsAsync,
-            Func<Project, bool, ImmutableHashSet<string>, CancellationToken, Task<IEnumerable<Diagnostic>>> getProjectDiagnosticsAsync)
-        {
-            var diagnosticIds = GetFixAllDiagnosticIds(fixAllProviderInfo, originalFixDiagnostics).ToImmutableHashSet();
-            var diagnosticProvider = new FixAllDiagnosticProvider(diagnosticIds, getDocumentDiagnosticsAsync, getProjectDiagnosticsAsync);
-            return new FixAllState(
-                fixAllProvider: fixAllProvider,
-                project: project,
-                codeFixProvider: originalFixProvider,
-                scope: FixAllScope.Project,
-                codeActionEquivalenceKey: null, diagnosticIds: diagnosticIds,
-                fixAllDiagnosticProvider: diagnosticProvider);
-        }
-
-        private static IEnumerable<string> GetFixAllDiagnosticIds(FixAllProviderInfo fixAllProviderInfo, IEnumerable<Diagnostic> originalFixDiagnostics)
-        {
-            return originalFixDiagnostics
-                .Where(fixAllProviderInfo.CanBeFixed)
-                .Select(d => d.Id);
         }
 
         internal string GetDefaultFixAllTitle()
@@ -196,7 +138,7 @@ namespace Microsoft.CodeAnalysis.CodeFixes
                     return string.Format(WorkspacesResources.Fix_all_0_in_Solution, diagnosticId);
 
                 default:
-                    throw ExceptionUtilities.Unreachable;
+                    throw ExceptionUtilities.UnexpectedValue(this.Scope);
             }
         }
 

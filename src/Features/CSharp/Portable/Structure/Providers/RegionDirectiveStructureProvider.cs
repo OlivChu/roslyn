@@ -1,9 +1,11 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Collections.Immutable;
 using System.Threading;
 using Microsoft.CodeAnalysis.CSharp.Extensions;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Options;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Structure;
 using Microsoft.CodeAnalysis.Text;
 
@@ -29,17 +31,21 @@ namespace Microsoft.CodeAnalysis.CSharp.Structure
 
         protected override void CollectBlockSpans(
             RegionDirectiveTriviaSyntax regionDirective,
-            ImmutableArray<BlockSpan>.Builder spans,
+            ArrayBuilder<BlockSpan> spans,
+            OptionSet options,
             CancellationToken cancellationToken)
         {
             var match = regionDirective.GetMatchingDirective(cancellationToken);
             if (match != null)
             {
+                var autoCollapse = options.GetOption(
+                    BlockStructureOptions.CollapseRegionsWhenCollapsingToDefinitions, LanguageNames.CSharp);
                 spans.Add(new BlockSpan(
                     isCollapsible: true,
                     textSpan: TextSpan.FromBounds(regionDirective.SpanStart, match.Span.End),
+                    type: BlockTypes.PreprocessorRegion,
                     bannerText: GetBannerText(regionDirective),
-                    autoCollapse: true,
+                    autoCollapse: autoCollapse,
                     isDefaultCollapsed: true));
             }
         }

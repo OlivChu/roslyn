@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading.Tasks
 
@@ -153,7 +153,7 @@ public class MainClass
         <Document>
 Class B
     Event {|Definition:$$X|}()
-    Sub Foo()
+    Sub Goo()
         [|XEvent|]()
     End Sub
 End Class
@@ -172,7 +172,7 @@ End Class
         <Document>
 Class B
     Event {|Definition:X|}()
-    Sub Foo()
+    Sub Goo()
         [|$$XEvent|]()
     End Sub
 End Class
@@ -182,9 +182,10 @@ End Class
             Await TestAPIAndFeature(input)
         End Function
 
+        <WorkItem(14428, "https://github.com/dotnet/roslyn/issues/14428")>
         <WorkItem(553324, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/553324")>
         <WpfFact, Trait(Traits.Feature, Traits.Features.FindReferences)>
-        Public Async Function TestEventParameterCascading() As Task
+        Public Async Function TestEventParameterCascading1() As Task
             Dim input =
 <Workspace>
     <Project Language="Visual Basic" CommonReferences="true">
@@ -195,6 +196,50 @@ Module M
         Dim e As EEventHandler
         e.BeginInvoke([|x|]:=Nothing, DelegateCallback:=Nothing, DelegateAsyncState:=Nothing)
         e.Invoke([|x|]:=Nothing)
+    End Sub
+End Module
+        </Document>
+    </Project>
+</Workspace>
+            Await TestAPIAndFeature(input)
+        End Function
+
+        <WorkItem(14428, "https://github.com/dotnet/roslyn/issues/14428")>
+        <WorkItem(553324, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/553324")>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.FindReferences)>
+        Public Async Function TestEventParameterCascading2() As Task
+            Dim input =
+<Workspace>
+    <Project Language="Visual Basic" CommonReferences="true">
+        <Document>
+Module M
+    Event E({|Definition:x|} As Object)
+    Sub Main()
+        Dim e As EEventHandler
+        e.BeginInvoke([|$$x|]:=Nothing, DelegateCallback:=Nothing, DelegateAsyncState:=Nothing)
+        e.Invoke([|x|]:=Nothing)
+    End Sub
+End Module
+        </Document>
+    </Project>
+</Workspace>
+            Await TestAPIAndFeature(input)
+        End Function
+
+        <WorkItem(14428, "https://github.com/dotnet/roslyn/issues/14428")>
+        <WorkItem(553324, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/553324")>
+        <WpfFact, Trait(Traits.Feature, Traits.Features.FindReferences)>
+        Public Async Function TestEventParameterCascading3() As Task
+            Dim input =
+<Workspace>
+    <Project Language="Visual Basic" CommonReferences="true">
+        <Document>
+Module M
+    Event E({|Definition:x|} As Object)
+    Sub Main()
+        Dim e As EEventHandler
+        e.BeginInvoke([|x|]:=Nothing, DelegateCallback:=Nothing, DelegateAsyncState:=Nothing)
+        e.Invoke([|$$x|]:=Nothing)
     End Sub
 End Module
         </Document>

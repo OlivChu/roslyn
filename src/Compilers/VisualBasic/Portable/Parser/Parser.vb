@@ -6,6 +6,7 @@
 
 Imports System.Runtime.InteropServices
 Imports System.Threading
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.Syntax.InternalSyntax
 Imports Microsoft.CodeAnalysis.Text
 Imports CoreInternalSyntax = Microsoft.CodeAnalysis.Syntax.InternalSyntax
@@ -355,7 +356,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Syntax.InternalSyntax
 
             ' grab the part that doesn't contain the preceding and trailing trivia.
 
-            Dim builder = Collections.PooledStringBuilder.GetInstance()
+            Dim builder = PooledStringBuilder.GetInstance()
             Dim writer As New IO.StringWriter(builder)
 
             firstToken.WriteTo(writer)
@@ -376,7 +377,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Syntax.InternalSyntax
 
             ' grab the part that doesn't contain the preceding and trailing trivia.
 
-            Dim builder = Collections.PooledStringBuilder.GetInstance()
+            Dim builder = PooledStringBuilder.GetInstance()
             Dim writer As New IO.StringWriter(builder)
 
             firstToken.WriteTo(writer)
@@ -2940,36 +2941,89 @@ checkNullable:
 
         Private Function ParseTupleType(openParen As PunctuationSyntax) As TypeSyntax
             Dim elementBuilder = _pool.AllocateSeparated(Of TupleElementSyntax)()
+            Dim unexpected As GreenNode = Nothing
 
             Do
-                Dim identifierNameOpt As IdentifierNameSyntax = Nothing
+                Dim identifierNameOpt As IdentifierTokenSyntax = Nothing
                 Dim asKeywordOpt As KeywordSyntax = Nothing
 
+                ' if there is a type character or As, then this must be a name
                 If CurrentToken.Kind = SyntaxKind.IdentifierToken AndAlso
-                        PeekNextToken().Kind = SyntaxKind.AsKeyword Then
+                        (DirectCast(CurrentToken, IdentifierTokenSyntax).TypeCharacter <> TypeCharacter.None OrElse
+                        PeekNextToken().Kind = SyntaxKind.AsKeyword) Then
 
-                    identifierNameOpt = ParseIdentifierNameAllowingKeyword()
+                    identifierNameOpt = ParseIdentifier()
                     TryGetToken(SyntaxKind.AsKeyword, asKeywordOpt)
-
                 End If
 
-                Dim type = ParseGeneralType()
-                Dim element = SyntaxFactory.TupleElement(identifierNameOpt, asKeywordOpt, type)
+                Dim typeOpt As TypeSyntax = Nothing
+                ' if have "As" or have no element name, must have a type
+                If asKeywordOpt IsNot Nothing OrElse identifierNameOpt Is Nothing Then
+                    typeOpt = ParseGeneralType()
+                End If
+
+                Dim element As TupleElementSyntax
+
+                If identifierNameOpt IsNot Nothing Then
+                    Dim simpleAsClause As SimpleAsClauseSyntax = Nothing
+                    If asKeywordOpt IsNot Nothing Then
+                        Debug.Assert(typeOpt IsNot Nothing)
+                        simpleAsClause = SyntaxFactory.SimpleAsClause(asKeywordOpt, attributeLists:=Nothing, type:=typeOpt)
+                    End If
+
+                    element = SyntaxFactory.NamedTupleElement(identifierNameOpt, simpleAsClause)
+
+                Else
+                    Debug.Assert(typeOpt IsNot Nothing)
+                    element = SyntaxFactory.TypedTupleElement(typeOpt)
+                End If
 
                 elementBuilder.Add(element)
 
-                If CurrentToken.Kind = SyntaxKind.CommaToken Then
-                    Dim commaToken As PunctuationSyntax = Nothing
-                    TryGetTokenAndEatNewLine(SyntaxKind.CommaToken, commaToken)
 
+                Dim commaToken As PunctuationSyntax = Nothing
+                If TryGetTokenAndEatNewLine(SyntaxKind.CommaToken, commaToken) Then
                     elementBuilder.AddSeparator(commaToken)
-                Else
+                    Continue Do
+
+                ElseIf CurrentToken.Kind = SyntaxKind.CloseParenToken OrElse MustEndStatement(CurrentToken) Then
                     Exit Do
+
+                Else
+                    ' There is a syntax error of some kind.
+
+                    Dim skipped = ResyncAt({SyntaxKind.CommaToken, SyntaxKind.CloseParenToken}).Node
+                    If skipped IsNot Nothing AndAlso Not element.ContainsDiagnostics Then
+                        skipped = ReportSyntaxError(skipped, ERRID.ERR_ArgumentSyntax)
+                    End If
+
+                    If CurrentToken.Kind = SyntaxKind.CommaToken Then
+                        commaToken = DirectCast(CurrentToken, PunctuationSyntax)
+                        commaToken = commaToken.AddLeadingSyntax(skipped)
+                        elementBuilder.AddSeparator(commaToken)
+                        GetNextToken()
+                    Else
+                        unexpected = skipped
+                        Exit Do
+                    End If
                 End If
             Loop
 
             Dim closeParen As PunctuationSyntax = Nothing
             TryEatNewLineAndGetToken(SyntaxKind.CloseParenToken, closeParen, createIfMissing:=True)
+
+            If unexpected IsNot Nothing Then
+                closeParen = closeParen.AddLeadingSyntax(unexpected)
+            End If
+
+            If elementBuilder.Count < 2 Then
+                Debug.Assert(elementBuilder.Count > 0)
+                elementBuilder.AddSeparator(InternalSyntaxFactory.MissingToken(SyntaxKind.CommaToken))
+
+                Dim missing = SyntaxFactory.IdentifierName(InternalSyntaxFactory.MissingIdentifier())
+                missing = ReportSyntaxError(missing, ERRID.ERR_TupleTooFewElements)
+                elementBuilder.Add(_syntaxFactory.TypedTupleElement(missing))
+            End If
 
             Dim tupleElements = elementBuilder.ToList
             _pool.Free(elementBuilder)
@@ -4142,7 +4196,7 @@ checkNullable:
                 End If
             End If
 
-            ' ===== Parse the property's type (e.g. Property Foo(params) AS type )
+            ' ===== Parse the property's type (e.g. Property Goo(params) AS type )
 
             Dim asClause As AsClauseSyntax = Nothing
             Dim initializer As EqualsValueSyntax = Nothing
@@ -5525,7 +5579,7 @@ checkNullable:
                         typeName = ResyncAt(typeName, SyntaxKind.GreaterThanToken)
 
                     ElseIf CurrentToken.Kind = SyntaxKind.OpenParenToken Then
-                        arguments = ParseParenthesizedArguments()
+                        arguments = ParseParenthesizedArguments(attributeListParent:=True)
                     End If
 
                     Dim attribute As AttributeSyntax = SyntaxFactory.Attribute(optionalTarget, typeName, arguments)
@@ -6114,7 +6168,8 @@ checkNullable:
             If feature = Feature.InterpolatedStrings Then
                 ' Bug: It is too late in the release cycle to update localized strings.  As a short term measure we will output 
                 ' an unlocalized string and fix this to be localized in the next release.
-                Return ReportSyntaxError(node, ERRID.ERR_LanguageVersion, languageVersion.GetErrorName(), "interpolated strings")
+                Dim requiredVersion = New VisualBasicRequiredLanguageVersion(feature.GetLanguageVersion())
+                Return ReportSyntaxError(node, ERRID.ERR_LanguageVersion, languageVersion.GetErrorName(), "interpolated strings", requiredVersion)
             Else
                 Return ReportFeatureUnavailable(feature, node, languageVersion)
             End If
@@ -6122,7 +6177,8 @@ checkNullable:
 
         Private Shared Function ReportFeatureUnavailable(Of TNode As VisualBasicSyntaxNode)(feature As Feature, node As TNode, languageVersion As LanguageVersion) As TNode
             Dim featureName = ErrorFactory.ErrorInfo(feature.GetResourceId())
-            Return ReportSyntaxError(node, ERRID.ERR_LanguageVersion, languageVersion.GetErrorName(), featureName)
+            Dim requiredVersion = New VisualBasicRequiredLanguageVersion(feature.GetLanguageVersion())
+            Return ReportSyntaxError(node, ERRID.ERR_LanguageVersion, languageVersion.GetErrorName(), featureName, requiredVersion)
         End Function
 
         Friend Function ReportFeatureUnavailable(Of TNode As VisualBasicSyntaxNode)(feature As Feature, node As TNode) As TNode
@@ -6138,12 +6194,18 @@ checkNullable:
             Return required <= languageVersion
         End Function
 
-        Friend Shared Sub CheckFeatureAvailability(diagnostics As DiagnosticBag, location As Location, languageVersion As LanguageVersion, feature As Feature)
+        ''' <summary>
+        ''' Returns false and reports an error if the feature is un-available
+        ''' </summary>
+        Friend Shared Function CheckFeatureAvailability(diagnostics As DiagnosticBag, location As Location, languageVersion As LanguageVersion, feature As Feature) As Boolean
             If Not CheckFeatureAvailability(languageVersion, feature) Then
                 Dim featureName = ErrorFactory.ErrorInfo(feature.GetResourceId())
-                diagnostics.Add(ERRID.ERR_LanguageVersion, location, languageVersion.GetErrorName(), featureName)
+                Dim requiredVersion = New VisualBasicRequiredLanguageVersion(feature.GetLanguageVersion())
+                diagnostics.Add(ERRID.ERR_LanguageVersion, location, languageVersion.GetErrorName(), featureName, requiredVersion)
+                Return False
             End If
-        End Sub
+            Return True
+        End Function
 
     End Class
 

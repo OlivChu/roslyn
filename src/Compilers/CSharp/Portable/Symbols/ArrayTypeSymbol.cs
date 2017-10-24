@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Linq;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols
@@ -135,9 +136,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         public abstract int Rank { get; }
 
         /// <summary>
-        /// Is this zero-based one-dimensional array, i.e. SZArray in CLR terms.
+        /// Is this a zero-based one-dimensional array, i.e. SZArray in CLR terms.
         /// </summary>
-        internal abstract bool IsSZArray { get; }
+        public abstract bool IsSZArray { get; }
 
         internal bool HasSameShapeAs(ArrayTypeSymbol other)
         {
@@ -149,7 +150,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         /// meaning that some trailing dimensions don't have the size specified.
         /// The most common case is none of the dimensions have the size specified - an empty array is returned.
         /// </summary>
-        internal virtual ImmutableArray<int> Sizes
+        public virtual ImmutableArray<int> Sizes
         {
             get
             {
@@ -160,9 +161,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         /// <summary>
         /// Specified lower bounds for dimensions, by position. The length can be less than <see cref="Rank"/>,
         /// meaning that some trailing dimensions don't have the lower bound specified.
-        /// The most common case is all dimensions are zero bound - a null array is returned in this case.
+        /// The most common case is all dimensions are zero bound - a default array is returned in this case.
         /// </summary>
-        internal virtual ImmutableArray<int> LowerBounds
+        public virtual ImmutableArray<int> LowerBounds
         {
             get
             {
@@ -238,6 +239,22 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
             get
             {
                 return true;
+            }
+        }
+
+        internal sealed override bool IsByRefLikeType
+        {
+            get
+            {
+                return false;
+            }
+        }
+
+        internal sealed override bool IsReadOnly
+        {
+            get
+            {
+                return false;
             }
         }
 
@@ -510,9 +527,15 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 _interfaces = constructedInterfaces;
             }
 
-            internal override ArrayTypeSymbol WithElementType(TypeSymbol elementType)
+            internal override ArrayTypeSymbol WithElementType(TypeSymbol newElementType)
             {
-                return new SZArray(elementType, BaseTypeNoUseSiteDiagnostics, _interfaces, CustomModifiers);
+                ImmutableArray<NamedTypeSymbol> newInterfaces = _interfaces;
+                if (newInterfaces.Length>0)
+                {
+                    newInterfaces = newInterfaces.SelectAsArray(i => i.OriginalDefinition.Construct(newElementType));
+                }
+
+                return new SZArray(newElementType, BaseTypeNoUseSiteDiagnostics, newInterfaces, CustomModifiers);
             }
 
             public override int Rank
@@ -523,7 +546,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 }
             }
 
-            internal override bool IsSZArray
+            /// <summary>
+            /// SZArray is an array type encoded in metadata with ELEMENT_TYPE_SZARRAY (always single-dim array with 0 lower bound).
+            /// Non-SZArray type is ecoded in metadata with ELEMENT_TYPE_ARRAY and with optional sizes and lower bounds. Even though 
+            /// non-SZArray can also be a single-dim array with 0 lower bound, the encoding of these types in metadata is distinct.
+            /// </summary>
+            public override bool IsSZArray
             {
                 get
                 {
@@ -571,7 +599,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 }
             }
 
-            internal sealed override bool IsSZArray
+            public sealed override bool IsSZArray
             {
                 get
                 {
@@ -635,7 +663,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 return new MDArrayWithSizesAndBounds(elementType, Rank, _sizes, _lowerBounds, BaseTypeNoUseSiteDiagnostics, CustomModifiers);
             }
 
-            internal override ImmutableArray<int> Sizes
+            public override ImmutableArray<int> Sizes
             {
                 get
                 {
@@ -643,7 +671,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                 }
             }
 
-            internal override ImmutableArray<int> LowerBounds
+            public override ImmutableArray<int> LowerBounds
             {
                 get
                 {

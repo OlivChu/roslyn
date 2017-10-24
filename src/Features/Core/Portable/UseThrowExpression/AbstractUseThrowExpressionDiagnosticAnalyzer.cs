@@ -4,9 +4,9 @@ using System;
 using System.Collections.Immutable;
 using System.Reflection;
 using System.Threading;
-using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeStyle;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.LanguageServices;
 using Microsoft.CodeAnalysis.Semantics;
 using Microsoft.CodeAnalysis.Text;
 
@@ -18,66 +18,56 @@ namespace Microsoft.CodeAnalysis.UseThrowExpression
     /// if (a == null) {
     ///   throw SomeException();
     /// }
-    /// 
+    ///
     /// x = a;
     /// </code>
-    /// 
+    ///
     /// and offers to change it to
-    /// 
+    ///
     /// <code>
     /// x = a ?? throw SomeException();
     /// </code>
-    /// 
-    /// Note: this analyzer can be udpated to run on VB once VB supports 'throw' 
+    ///
+    /// Note: this analyzer can be updated to run on VB once VB supports 'throw'
     /// expressions as well.
     /// </summary>
-    internal abstract class AbstractUseThrowExpressionDiagnosticAnalyzer : DiagnosticAnalyzer, IBuiltInAnalyzer
+    internal abstract class AbstractUseThrowExpressionDiagnosticAnalyzer :
+        AbstractCodeStyleDiagnosticAnalyzer
     {
-        private static readonly LocalizableString s_localizableTitle = new LocalizableResourceString(nameof(FeaturesResources.Use_throw_expression), FeaturesResources.ResourceManager, typeof(FeaturesResources));
-        private static readonly LocalizableString s_localizableMessage = new LocalizableResourceString(nameof(FeaturesResources.Use_throw_expression), FeaturesResources.ResourceManager, typeof(FeaturesResources));
+        protected AbstractUseThrowExpressionDiagnosticAnalyzer()
+            : base(IDEDiagnosticIds.UseThrowExpressionDiagnosticId,
+                   new LocalizableResourceString(nameof(FeaturesResources.Use_throw_expression), FeaturesResources.ResourceManager, typeof(FeaturesResources)),
+                   new LocalizableResourceString(nameof(FeaturesResources.Null_check_can_be_simplified), FeaturesResources.ResourceManager, typeof(FeaturesResources)))
+        {
+        }
 
-        private static DiagnosticDescriptor s_descriptor = 
-            CreateDescriptor(DiagnosticSeverity.Hidden);
-
-        private static DiagnosticDescriptor s_unnecessaryCodeDescriptor =
-            CreateDescriptor(DiagnosticSeverity.Hidden, customTags: DiagnosticCustomTags.Unnecessary);
-
-        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics
-            => ImmutableArray.Create(s_descriptor, s_unnecessaryCodeDescriptor);
-
-        public DiagnosticAnalyzerCategory GetAnalyzerCategory()
+        public override DiagnosticAnalyzerCategory GetAnalyzerCategory()
             => DiagnosticAnalyzerCategory.SemanticDocumentAnalysis;
 
-        public bool OpenFileOnly(Workspace workspace) => false;
+        public override bool OpenFileOnly(Workspace workspace) => false;
 
         private static MethodInfo s_registerOperationActionInfo =
-            typeof(AnalysisContext).GetTypeInfo().GetDeclaredMethod("RegisterOperationActionImmutableArrayInternal");
+            typeof(CompilationStartAnalysisContext).GetTypeInfo().GetDeclaredMethod("RegisterOperationActionImmutableArrayInternal");
 
         private static MethodInfo s_getOperationInfo =
             typeof(SemanticModel).GetTypeInfo().GetDeclaredMethod("GetOperationInternal");
 
         protected abstract bool IsSupported(ParseOptions options);
 
-        private static DiagnosticDescriptor CreateDescriptor(DiagnosticSeverity severity, params string[] customTags)
-            => new DiagnosticDescriptor(
-                    IDEDiagnosticIds.UseThrowExpressionDiagnosticId,
-                    s_localizableTitle,
-                    s_localizableMessage,
-                    DiagnosticCategory.Style,
-                    DiagnosticSeverity.Hidden,
-                    isEnabledByDefault: true,
-                    customTags: customTags);
-
-        public override void Initialize(AnalysisContext context)
+        protected override void InitializeWorker(AnalysisContext context)
         {
-            s_registerOperationActionInfo.Invoke(context, new object[]
+            context.RegisterCompilationStartAction(startContext =>
             {
-                new Action<OperationAnalysisContext>(AnalyzeOperation),
-                ImmutableArray.Create(OperationKind.ThrowStatement)
+                var expressionTypeOpt = startContext.Compilation.GetTypeByMetadataName("System.Linq.Expressions.Expression`1");
+                s_registerOperationActionInfo.Invoke(startContext, new object[]
+                {
+                    new Action<OperationAnalysisContext>(operationContext => AnalyzeOperation(operationContext, expressionTypeOpt)),
+                    ImmutableArray.Create(OperationKind.ThrowExpression)
+                });
             });
         }
 
-        private void AnalyzeOperation(OperationAnalysisContext context)
+        private void AnalyzeOperation(OperationAnalysisContext context, INamedTypeSymbol expressionTypeOpt)
         {
             var syntaxTree = context.Operation.Syntax.SyntaxTree;
             if (!IsSupported(syntaxTree.Options))
@@ -87,26 +77,48 @@ namespace Microsoft.CodeAnalysis.UseThrowExpression
 
             var cancellationToken = context.CancellationToken;
 
-            var throwOperation = (IThrowStatement)context.Operation;
-            var throwStatement = throwOperation.Syntax;
+            var throwExpressionOperation = (IThrowExpression)context.Operation;
+            var throwStatementOperation = throwExpressionOperation.Parent;
+            if (throwStatementOperation.Kind != OperationKind.ExpressionStatement)
+            {
+                return;
+            }
 
-            var optionSet = context.Options.GetOptionSet();
-            var option = optionSet.GetOption(CodeStyleOptions.PreferThrowExpression, throwStatement.Language);
+            var throwStatementSyntax = throwExpressionOperation.Syntax;
+            var options = context.Options;
+            var optionSet = options.GetDocumentOptionSetAsync(syntaxTree, cancellationToken).GetAwaiter().GetResult();
+            if (optionSet == null)
+            {
+                return;
+            }
+
+            var option = optionSet.GetOption(CodeStyleOptions.PreferThrowExpression, throwStatementSyntax.Language);
             if (!option.Value)
             {
                 return;
             }
 
             var compilation = context.Compilation;
-            var semanticModel = compilation.GetSemanticModel(throwStatement.SyntaxTree);
+            var semanticModel = compilation.GetSemanticModel(throwStatementSyntax.SyntaxTree);
+            var semanticFacts = GetSemanticFactsService();
+            if (semanticFacts.IsInExpressionTree(semanticModel, throwStatementSyntax, expressionTypeOpt, cancellationToken))
+            {
+                return;
+            }
 
             var ifOperation = GetContainingIfOperation(
-                semanticModel, throwOperation, cancellationToken);
+                semanticModel, (IExpressionStatement)throwStatementOperation, cancellationToken);
 
             // This throw statement isn't parented by an if-statement.  Nothing to
             // do here.
             if (ifOperation == null)
             {
+                return;
+            }
+
+            if (ifOperation.IfFalseStatement != null)
+            {
+                // Can't offer this if the 'if-statement' has an 'else-clause'.
                 return;
             }
 
@@ -117,48 +129,43 @@ namespace Microsoft.CodeAnalysis.UseThrowExpression
                 return;
             }
 
-            ISymbol localOrParameter;
-            if (!TryDecomposeIfCondition(ifOperation, out localOrParameter))
+            if (!TryDecomposeIfCondition(ifOperation, out var localOrParameter))
             {
                 return;
             }
 
-            IExpressionStatement expressionStatement;
-            IAssignmentExpression assignmentExpression;
             if (!TryFindAssignmentExpression(containingBlock, ifOperation, localOrParameter,
-                out expressionStatement, out assignmentExpression))
+                    out var expressionStatement, out var assignmentExpression))
             {
                 return;
             }
 
             // We found an assignment using this local/parameter.  Now, just make sure there
-            // were no intervening writes between the check and the assignement.
-            var dataFlow = semanticModel.AnalyzeDataFlow(
-                ifOperation.Syntax, expressionStatement.Syntax);
-
-            if (dataFlow.WrittenInside.Contains(localOrParameter))
+            // were no intervening accesses between the check and the assignment.
+            if (ValueIsAccessed(
+                    semanticModel, ifOperation, containingBlock,
+                    localOrParameter, expressionStatement, assignmentExpression))
             {
                 return;
             }
 
-            // Ok, there were no intervening writes.  This check+assignment can be simplified.
-
+            // Ok, there were no intervening writes or accesses.  This check+assignment can be simplified.
             var allLocations = ImmutableArray.Create(
                 ifOperation.Syntax.GetLocation(),
-                throwOperation.ThrownObject.Syntax.GetLocation(),
+                throwExpressionOperation.Expression.Syntax.GetLocation(),
                 assignmentExpression.Value.Syntax.GetLocation());
 
-            var descriptor = CreateDescriptor(option.Notification.Value);
+            var descriptor = GetDescriptorWithSeverity(option.Notification.Value);
 
             context.ReportDiagnostic(
-                Diagnostic.Create(descriptor, throwStatement.GetLocation(), additionalLocations: allLocations));
+                Diagnostic.Create(descriptor, throwStatementSyntax.GetLocation(), additionalLocations: allLocations));
 
             // Fade out the rest of the if that surrounds the 'throw' exception.
 
-            var tokenBeforeThrow = throwStatement.GetFirstToken().GetPreviousToken();
-            var tokenAfterThrow = throwStatement.GetLastToken().GetNextToken();
+            var tokenBeforeThrow = throwStatementSyntax.GetFirstToken().GetPreviousToken();
+            var tokenAfterThrow = throwStatementSyntax.GetLastToken().GetNextToken();
             context.ReportDiagnostic(
-                Diagnostic.Create(s_unnecessaryCodeDescriptor,
+                Diagnostic.Create(UnnecessaryWithSuggestionDescriptor,
                     Location.Create(syntaxTree, TextSpan.FromBounds(
                         ifOperation.Syntax.SpanStart,
                         tokenBeforeThrow.Span.End)),
@@ -167,13 +174,44 @@ namespace Microsoft.CodeAnalysis.UseThrowExpression
             if (ifOperation.Syntax.Span.End > tokenAfterThrow.Span.Start)
             {
                 context.ReportDiagnostic(
-                    Diagnostic.Create(s_unnecessaryCodeDescriptor,
+                    Diagnostic.Create(UnnecessaryWithSuggestionDescriptor,
                         Location.Create(syntaxTree, TextSpan.FromBounds(
                             tokenAfterThrow.Span.Start,
                             ifOperation.Syntax.Span.End)),
                         additionalLocations: allLocations));
             }
         }
+
+        private static bool ValueIsAccessed(SemanticModel semanticModel, IIfStatement ifOperation, IBlockStatement containingBlock, ISymbol localOrParameter, IExpressionStatement expressionStatement, IAssignmentExpression assignmentExpression)
+        {
+            var statements = containingBlock.Statements;
+            var ifOperationIndex = statements.IndexOf(ifOperation);
+            var expressionStatementIndex = statements.IndexOf(expressionStatement);
+
+            if (expressionStatementIndex > ifOperationIndex + 1)
+            {
+                // There are intermediary statements between the check and the assignment.
+                // Make sure they don't try to access the local.
+                var dataFlow = semanticModel.AnalyzeDataFlow(
+                    statements[ifOperationIndex + 1].Syntax,
+                    statements[expressionStatementIndex - 1].Syntax);
+
+                if (dataFlow.ReadInside.Contains(localOrParameter) ||
+                    dataFlow.WrittenInside.Contains(localOrParameter))
+                {
+                    return true;
+                }
+            }
+
+            // Also, have to make sure there is no read/write of the local/parameter on the left
+            // of the assignment.  For example: map[val.Id] = val;
+            var exprDataFlow = semanticModel.AnalyzeDataFlow(assignmentExpression.Target.Syntax);
+            return exprDataFlow.ReadInside.Contains(localOrParameter) ||
+                   exprDataFlow.WrittenInside.Contains(localOrParameter);
+        }
+
+        protected abstract ISyntaxFactsService GetSyntaxFactsService();
+        protected abstract ISemanticFactsService GetSemanticFactsService();
 
         private bool TryFindAssignmentExpression(
             IBlockStatement containingBlock, IIfStatement ifOperation, ISymbol localOrParameter,
@@ -197,8 +235,7 @@ namespace Microsoft.CodeAnalysis.UseThrowExpression
                     continue;
                 }
 
-                ISymbol assignmentValue;
-                if (!TryGetLocalOrParameterSymbol(assignmentExpression.Value, out assignmentValue))
+                if (!TryGetLocalOrParameterSymbol(assignmentExpression.Value, out var assignmentValue))
                 {
                     continue;
                 }
@@ -223,13 +260,12 @@ namespace Microsoft.CodeAnalysis.UseThrowExpression
             localOrParameter = null;
 
             var condition = ifStatement.Condition;
-            var binaryOperator = condition as IBinaryOperatorExpression;
-            if (binaryOperator == null)
+            if (!(condition is IBinaryOperatorExpression binaryOperator))
             {
                 return false;
             }
 
-            if (binaryOperator.GetSimpleBinaryOperationKind() != SimpleBinaryOperationKind.Equals)
+            if (binaryOperator.OperatorKind != BinaryOperatorKind.Equals)
             {
                 return false;
             }
@@ -252,21 +288,18 @@ namespace Microsoft.CodeAnalysis.UseThrowExpression
         private bool TryGetLocalOrParameterSymbol(
             IOperation operation, out ISymbol localOrParameter)
         {
-            if (operation.Kind == OperationKind.ConversionExpression)
+            if (operation is IConversionExpression conversion && !conversion.IsExplicitInCode)
             {
-                var conversionExpression = (IConversionExpression)operation;
-                return TryGetLocalOrParameterSymbol(
-                    conversionExpression.Operand, out localOrParameter);
+                return TryGetLocalOrParameterSymbol(conversion.Operand, out localOrParameter);
             }
-
-            if (operation.Kind == OperationKind.LocalReferenceExpression)
+            else if (operation is ILocalReferenceExpression localReference)
             {
-                localOrParameter = ((ILocalReferenceExpression)operation).Local;
+                localOrParameter = localReference.Local;
                 return true;
             }
-            else if (operation.Kind == OperationKind.ParameterReferenceExpression)
+            else if (operation is IParameterReferenceExpression parameterReference)
             {
-                localOrParameter = ((IParameterReferenceExpression)operation).Parameter;
+                localOrParameter = parameterReference.Parameter;
                 return true;
             }
 
@@ -281,17 +314,24 @@ namespace Microsoft.CodeAnalysis.UseThrowExpression
         }
 
         private IIfStatement GetContainingIfOperation(
-            SemanticModel semanticModel, IThrowStatement throwOperation,
+            SemanticModel semanticModel, IExpressionStatement throwOperation,
             CancellationToken cancellationToken)
         {
             var throwStatement = throwOperation.Syntax;
             var containingOperation = GetOperation(
                 semanticModel, throwStatement.Parent, cancellationToken);
 
-            if (containingOperation?.Kind == OperationKind.BlockStatement)
+            if (containingOperation is IBlockStatement block)
             {
+                if (block.Statements.Length != 1)
+                {
+                    // If we are in a block, then the block must only contain
+                    // the throw statement.
+                    return null;
+                }
+
                 // C# may have an intermediary block between the throw-statement
-                // and the if-statement.  Walk up one operation higher in htat case.
+                // and the if-statement.  Walk up one operation higher in that case.
                 containingOperation = GetOperation(
                     semanticModel, throwStatement.Parent.Parent, cancellationToken);
             }

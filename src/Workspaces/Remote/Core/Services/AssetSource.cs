@@ -1,10 +1,9 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.CodeAnalysis.Execution;
-using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.Remote
 {
@@ -13,22 +12,15 @@ namespace Microsoft.CodeAnalysis.Remote
     /// </summary>
     internal abstract class AssetSource
     {
-        private static int s_serviceId = 0;
+        private readonly AssetStorage _assetStorage;
 
-        private readonly int _currentId = 0;
-
-        protected AssetSource()
+        protected AssetSource(AssetStorage assetStorage)
         {
-            _currentId = Interlocked.Add(ref s_serviceId, 1);
+            _assetStorage = assetStorage;
 
-            RoslynServices.AssetService.RegisterAssetSource(_currentId, this);
+            _assetStorage.SetAssetSource(this);
         }
 
-        public abstract Task<IList<ValueTuple<Checksum, object>>> RequestAssetsAsync(int serviceId, ISet<Checksum> checksums, CancellationToken cancellationToken);
-
-        public void Done()
-        {
-            RoslynServices.AssetService.UnregisterAssetSource(_currentId);
-        }
+        public abstract Task<IList<(Checksum, object)>> RequestAssetsAsync(int scopeId, ISet<Checksum> checksums, CancellationToken cancellationToken);
     }
 }

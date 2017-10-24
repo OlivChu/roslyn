@@ -33,9 +33,8 @@ namespace Microsoft.CodeAnalysis.Completion.Providers
                 var semanticModel = await document.GetSemanticModelForNodeAsync(node, cancellationToken).ConfigureAwait(false);
                 var syntaxContext = await CreateSyntaxContextAsync(document, semanticModel, position, cancellationToken).ConfigureAwait(false);
 
-                var declaredSymbol = semanticModel.GetDeclaredSymbol(node, cancellationToken) as INamedTypeSymbol;
 
-                if (declaredSymbol != null)
+                if (semanticModel.GetDeclaredSymbol(node, cancellationToken) is INamedTypeSymbol declaredSymbol)
                 {
                     var symbols = LookupCandidateSymbols(syntaxContext, declaredSymbol, cancellationToken);
                     var items = symbols?.Select(s => CreateCompletionItem(s, syntaxContext));
@@ -53,10 +52,10 @@ namespace Microsoft.CodeAnalysis.Completion.Providers
         {
             var displayAndInsertionText = GetDisplayAndInsertionText(symbol, context);
 
-            return SymbolCompletionItem.Create(
-                displayText: displayAndInsertionText.Item1,
-                insertionText: displayAndInsertionText.Item2,
-                symbol: symbol,
+            return SymbolCompletionItem.CreateWithSymbolId(
+                displayText: displayAndInsertionText.displayText,
+                insertionText: displayAndInsertionText.insertionText,
+                symbols: ImmutableArray.Create(symbol),
                 contextPosition: context.Position,
                 properties: GetProperties(symbol, context),
                 rules: CompletionItemRules.Default);
@@ -73,7 +72,7 @@ namespace Microsoft.CodeAnalysis.Completion.Providers
 
         protected abstract SyntaxNode GetPartialTypeSyntaxNode(SyntaxTree tree, int position, CancellationToken cancellationToken);
 
-        protected abstract ValueTuple<string, string> GetDisplayAndInsertionText(INamedTypeSymbol symbol, SyntaxContext context);
+        protected abstract (string displayText, string insertionText) GetDisplayAndInsertionText(INamedTypeSymbol symbol, SyntaxContext context);
 
         protected virtual IEnumerable<INamedTypeSymbol> LookupCandidateSymbols(SyntaxContext context, INamedTypeSymbol declaredSymbol, CancellationToken cancellationToken)
         {
@@ -110,10 +109,8 @@ namespace Microsoft.CodeAnalysis.Completion.Providers
                          .Any(node => !(node.SyntaxTree == context.SyntaxTree && node.Span.IntersectsWith(context.Position)));
         }
 
-        public override Task<CompletionDescription> GetDescriptionAsync(Document document, CompletionItem item, CancellationToken cancellationToken)
-        {
-            return SymbolCompletionItem.GetDescriptionAsync(item, document, cancellationToken);
-        }
+        protected override Task<CompletionDescription> GetDescriptionWorkerAsync(Document document, CompletionItem item, CancellationToken cancellationToken)
+            => SymbolCompletionItem.GetDescriptionAsync(item, document, cancellationToken);
 
         public override Task<TextChange?> GetTextChangeAsync(Document document, CompletionItem selectedItem, char? ch, CancellationToken cancellationToken)
         {

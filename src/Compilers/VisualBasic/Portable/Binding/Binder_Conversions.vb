@@ -3,6 +3,7 @@
 Imports System.Collections.Immutable
 Imports System.Runtime.InteropServices
 Imports Microsoft.CodeAnalysis.Collections
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
@@ -148,7 +149,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             If constantResult IsNot Nothing Then
                 Debug.Assert(Conversions.IsIdentityConversion(conv) OrElse
                                       conv = ConversionKind.WideningNothingLiteral OrElse
-                                      sourceType.GetEnumUnderlyingTypeOrSelf().IsSameTypeIgnoringCustomModifiers(targetType.GetEnumUnderlyingTypeOrSelf()))
+                                      sourceType.GetEnumUnderlyingTypeOrSelf().IsSameTypeIgnoringAll(targetType.GetEnumUnderlyingTypeOrSelf()))
                 Debug.Assert(Not integerOverflow)
                 Debug.Assert(Not constantResult.IsBad)
             Else
@@ -323,7 +324,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             If targetType.IsErrorType Then
                 argument = MakeRValueAndIgnoreDiagnostics(argument)
 
-                If Not isExplicit AndAlso argument.Type.IsSameTypeIgnoringCustomModifiers(targetType) Then
+                If Not isExplicit AndAlso argument.Type.IsSameTypeIgnoringAll(targetType) Then
                     Return argument
                 End If
 
@@ -428,7 +429,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             ' don't need representation in the bound tree (they would be optimized away in emit, but are so common
             ' that this is an important way to save both time and memory).
             If (Not isExplicit OrElse explicitSemanticForConcatArgument) AndAlso Conversions.IsIdentityConversion(convKind.Key) Then
-                Debug.Assert(argument.Type.IsSameTypeIgnoringCustomModifiers(targetType))
+                Debug.Assert(argument.Type.IsSameTypeIgnoringAll(targetType))
                 Debug.Assert(tree Is argument.Syntax)
                 Return MakeRValue(argument, diagnostics)
             End If
@@ -731,10 +732,10 @@ DoneWithDiagnostics:
             End If
 
             ' Variance scenario 1:                                  | Variance scenario 3:
-            ' Dim x as IEnumerable(Of Tiger) = New List(Of Animal)  | Dim x As IFoo(Of Animal) = New MyFoo
-            ' "List(Of Animal) cannot be converted to               | "MyFoo cannot be converted to IFoo(Of Animal).
+            ' Dim x as IEnumerable(Of Tiger) = New List(Of Animal)  | Dim x As IGoo(Of Animal) = New MyGoo
+            ' "List(Of Animal) cannot be converted to               | "MyGoo cannot be converted to IGoo(Of Animal).
             ' IEnumerable(Of Tiger) because 'Animal' is not derived | Consider changing the 'T' in the definition
-            ' from 'Tiger', as required for the 'Out' generic       | of interface IFoo(Of T) to an Out type
+            ' from 'Tiger', as required for the 'Out' generic       | of interface IGoo(Of T) to an Out type
             ' parameter 'T' in 'IEnumerable(Of Out T)'"             | parameter, Out T."
             '                                                       |
             ' (1) If the user attempts a conversion to              | (1) If the user attempts a conversion to some
@@ -751,7 +752,7 @@ DoneWithDiagnostics:
             '     or Out variance                                   | (5) Then pick the first difference Dj/Sj
             ' (5) Then pick on the one such difference Si/Di/Ti     | (6) and report "SOURCE cannot be converted to
             ' (6) and report "SOURCE cannot be converted to DEST    |     DEST. Consider changing Tj in the definition
-            '     because Si is not derived from Di, as required    |     of interface/delegate IFoo(Of T) to an
+            '     because Si is not derived from Di, as required    |     of interface/delegate IGoo(Of T) to an
             '     for the 'In/Out' generic parameter 'T' in         |     In/Out type parameter, In/Out T".
             '     'IEnumerable(Of Out T)'"                          |
             Dim matchingGenericInstantiation As NamedTypeSymbol
@@ -798,7 +799,7 @@ DoneWithDiagnostics:
                     Dim sourceArg As TypeSymbol = sourceArguments(i)
                     Dim destinationArg As TypeSymbol = destinationArguments(i)
 
-                    If sourceArg.IsSameTypeIgnoringCustomModifiers(destinationArg) Then
+                    If sourceArg.IsSameTypeIgnoringAll(destinationArg) Then
                         Continue For
                     End If
 
@@ -995,7 +996,11 @@ DoneWithDiagnostics:
 
                     ' The conversion has the lambda stored internally to not clutter the bound tree with synthesized nodes 
                     ' in the first pass. Later the node get's rewritten into a delegate creation with the lambda if needed.
-                    Return New BoundConversion(tree, argument, convKind, False, isExplicit, boundLambdaOpt, relaxationReceiverPlaceholderOpt, targetType)
+                    Return New BoundConversion(tree, argument, convKind, False, isExplicit, Nothing,
+                                               If(boundLambdaOpt Is Nothing,
+                                                  Nothing,
+                                                  New BoundRelaxationLambda(tree, boundLambdaOpt, relaxationReceiverPlaceholderOpt).MakeCompilerGenerated()),
+                                               targetType)
                 Else
                     Debug.Assert(diagnostics.HasAnyErrors())
                 End If
@@ -1016,7 +1021,39 @@ DoneWithDiagnostics:
                 constantResult = Conversions.TryFoldNothingReferenceConversion(argument, convKind, targetType)
             End If
 
-            Return New BoundConversion(tree, argument, convKind, CheckOverflow, isExplicit, constantResult, targetType)
+            Dim tupleElements As BoundConvertedTupleElements = CreateConversionForTupleElements(tree, sourceType, targetType, convKind, isExplicit)
+
+            Return New BoundConversion(tree, argument, convKind, CheckOverflow, isExplicit, constantResult, tupleElements, targetType)
+        End Function
+
+        Private Function CreateConversionForTupleElements(
+            tree As SyntaxNode,
+            sourceType As TypeSymbol,
+            targetType As TypeSymbol,
+            convKind As ConversionKind,
+            isExplicit As Boolean
+        ) As BoundConvertedTupleElements
+
+            If (convKind And ConversionKind.Tuple) <> 0 Then
+                Dim ignore = DiagnosticBag.GetInstance()
+                Dim sourceElementTypes = sourceType.GetNullableUnderlyingTypeOrSelf().GetElementTypesOfTupleOrCompatible()
+                Dim targetElementTypes = targetType.GetNullableUnderlyingTypeOrSelf().GetElementTypesOfTupleOrCompatible()
+
+                Dim placeholders = ArrayBuilder(Of BoundRValuePlaceholder).GetInstance(sourceElementTypes.Length)
+                Dim converted = ArrayBuilder(Of BoundExpression).GetInstance(sourceElementTypes.Length)
+
+                For i As Integer = 0 To sourceElementTypes.Length - 1
+                    Dim placeholder = New BoundRValuePlaceholder(tree, sourceElementTypes(i)).MakeCompilerGenerated()
+                    placeholders.Add(placeholder)
+                    converted.Add(ApplyConversion(tree, targetElementTypes(i), placeholder, isExplicit, ignore))
+                Next
+
+                ignore.Free()
+
+                Return New BoundConvertedTupleElements(tree, placeholders.ToImmutableAndFree(), converted.ToImmutableAndFree()).MakeCompilerGenerated()
+            End If
+
+            Return Nothing
         End Function
 
         Private Function CreateUserDefinedConversion(
@@ -1434,7 +1471,11 @@ DoneWithDiagnostics:
             End If
 
             If conversionSemantics = SyntaxKind.CTypeKeyword Then
-                Return New BoundConversion(tree, boundLambda, convKind, False, isExplicit, relaxationLambdaOpt, targetType)
+                Return New BoundConversion(tree, boundLambda, convKind, False, isExplicit, Nothing,
+                                           If(relaxationLambdaOpt Is Nothing,
+                                              Nothing,
+                                              New BoundRelaxationLambda(tree, relaxationLambdaOpt, receiverPlaceholderOpt:=Nothing).MakeCompilerGenerated()),
+                                           targetType)
             ElseIf conversionSemantics = SyntaxKind.DirectCastKeyword Then
                 Return New BoundDirectCast(tree, boundLambda, convKind, relaxationLambdaOpt, targetType)
             ElseIf conversionSemantics = SyntaxKind.TryCastKeyword Then
@@ -1560,7 +1601,7 @@ DoneWithDiagnostics:
 
         Private Function ReclassifyInterpolatedStringExpression(conversionSemantics As SyntaxKind, tree As SyntaxNode, convKind As ConversionKind, isExplicit As Boolean, node As BoundInterpolatedStringExpression, targetType As TypeSymbol, diagnostics As DiagnosticBag) As BoundExpression
 
-            If convKind = ConversionKind.InterpolatedString Then
+            If (convKind And ConversionKind.InterpolatedString) = ConversionKind.InterpolatedString Then
                 Debug.Assert(targetType.Equals(Compilation.GetWellKnownType(WellKnownType.System_IFormattable)) OrElse targetType.Equals(Compilation.GetWellKnownType(WellKnownType.System_FormattableString)))
                 Return New BoundConversion(tree, node, ConversionKind.InterpolatedString, False, isExplicit, targetType)
             End If
@@ -1579,7 +1620,7 @@ DoneWithDiagnostics:
 
             ' We have a successful tuple conversion rather than producing a separate conversion node 
             ' which is a conversion on top of a tuple literal, tuple conversion is an element-wise conversion of arguments.
-            Dim isNullableTupleConversion = (convKind = ConversionKind.WideningNullable) Or (convKind = ConversionKind.NarrowingNullable)
+            Dim isNullableTupleConversion = (convKind And ConversionKind.Nullable) <> 0
             Debug.Assert(Not isNullableTupleConversion OrElse destination.IsNullableType())
 
             Dim targetType = destination
@@ -1595,6 +1636,9 @@ DoneWithDiagnostics:
 
             If targetType.IsTupleType Then
                 Dim destTupleType = DirectCast(targetType, TupleTypeSymbol)
+
+                TupleTypeSymbol.ReportNamesMismatchesIfAny(targetType, sourceTuple, diagnostics)
+
                 ' do not lose the original element names in the literal if different from names in the target
                 ' Come back to this, what about locations? (https:'github.com/dotnet/roslyn/issues/11013)
                 targetType = destTupleType.WithElementNames(sourceTuple.ArgumentNamesOpt)

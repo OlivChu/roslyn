@@ -21,7 +21,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Structure.MetadataAsSou
             const string code = @"
 enum E
 {
-    $$Foo,
+    $$Goo,
     Bar
 }";
 
@@ -34,13 +34,13 @@ enum E
             const string code = @"
 enum E
 {
-    {|hint:{|collapse:[Blah]
-    |}$$Foo|},
+    {|hint:{|textspan:[Blah]
+    |}$$Goo|},
     Bar
 }";
 
             await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: true));
+                Region("textspan", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: true));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.MetadataAsSource)]
@@ -49,15 +49,15 @@ enum E
             const string code = @"
 enum E
 {
-    {|hint:{|collapse:// Summary:
+    {|hint:{|textspan:// Summary:
     //     This is a summary.
     [Blah]
-    |}$$Foo|},
+    |}$$Goo|},
     Bar
 }";
 
             await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: true));
+                Region("textspan", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: true));
         }
     }
 }

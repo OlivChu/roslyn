@@ -1,6 +1,7 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,8 +33,13 @@ namespace Microsoft.CodeAnalysis.SpellCheck
             }
 
             SemanticModel semanticModel = null;
-            foreach (var name in node.DescendantNodesAndSelf().OfType<TSimpleName>())
+            foreach (var name in node.DescendantNodesAndSelf(DescendIntoChildren).OfType<TSimpleName>())
             {
+                if (!ShouldSpellCheck(name))
+                {
+                    continue;
+                }
+
                 // Only bother with identifiers that are at least 3 characters long.
                 // We don't want to be too noisy as you're just starting to type something.
                 var nameText = name.GetFirstToken().ValueText;
@@ -48,6 +54,9 @@ namespace Microsoft.CodeAnalysis.SpellCheck
                 }
             }
         }
+
+        protected abstract bool ShouldSpellCheck(TSimpleName name);
+        protected abstract bool DescendIntoChildren(SyntaxNode arg);
 
         private async Task CreateSpellCheckCodeIssueAsync(CodeFixContext context, TSimpleName nameNode, string nameText, CancellationToken cancellationToken)
         {
@@ -67,36 +76,64 @@ namespace Microsoft.CodeAnalysis.SpellCheck
                 return;
             }
 
+            var similarityChecker = WordSimilarityChecker.Allocate(nameText, substringsAreSimilar: true);
+            try
+            {
+                await CheckItemsAsync(
+                    context, nameNode, nameText,
+                    completionList, similarityChecker).ConfigureAwait(false);
+            }
+            finally
+            {
+                similarityChecker.Free();
+            }
+        }
+
+        private async Task CheckItemsAsync(
+            CodeFixContext context, TSimpleName nameNode, string nameText, 
+            CompletionList completionList, WordSimilarityChecker similarityChecker)
+        {
+            var document = context.Document;
+            var cancellationToken = context.CancellationToken;
+
             var onlyConsiderGenerics = IsGeneric(nameNode);
             var results = new MultiDictionary<double, string>();
 
-            using (var similarityChecker = new WordSimilarityChecker(nameText, substringsAreSimilar: true))
+            foreach (var item in completionList.Items)
             {
-                foreach (var item in completionList.Items)
+                if (onlyConsiderGenerics && !IsGeneric(item))
                 {
-                    if (onlyConsiderGenerics && !IsGeneric(item))
-                    {
-                        continue;
-                    }
-
-                    var candidateText = item.FilterText;
-                    double matchCost;
-                    if (!similarityChecker.AreSimilar(candidateText, out matchCost))
-                    {
-                        continue;
-                    }
-
-                    var insertionText = await GetInsertionTextAsync(document, item, cancellationToken: cancellationToken).ConfigureAwait(false);
-                    results.Add(matchCost, insertionText);
+                    continue;
                 }
+
+                var candidateText = item.FilterText;
+                if (!similarityChecker.AreSimilar(candidateText, out var matchCost))
+                {
+                    continue;
+                }
+
+                var insertionText = await GetInsertionTextAsync(document, item, cancellationToken: cancellationToken).ConfigureAwait(false);
+                results.Add(matchCost, insertionText);
             }
 
-            var matches = results.OrderBy(kvp => kvp.Key)
-                                 .SelectMany(kvp => kvp.Value.Order())
-                                 .Where(t => t != nameText)
-                                 .Take(3)
-                                 .Select(n => CreateCodeAction(nameNode, nameText, n, document));
-            context.RegisterFixes(matches, context.Diagnostics);
+            var codeActions = results.OrderBy(kvp => kvp.Key)
+                                     .SelectMany(kvp => kvp.Value.Order())
+                                     .Where(t => t != nameText)
+                                     .Take(3)
+                                     .Select(n => CreateCodeAction(nameNode, nameText, n, document))
+                                     .ToImmutableArrayOrEmpty<CodeAction>();
+
+            if (codeActions.Length > 1)
+            {
+                // Wrap the spell checking actions into a single top level suggestion
+                // so as to not clutter the list.
+                context.RegisterCodeFix(new MyCodeAction(
+                    string.Format(FeaturesResources.Spell_check_0, nameText), codeActions), context.Diagnostics);
+            }
+            else
+            {
+                context.RegisterFixes(codeActions, context.Diagnostics);
+            }
         }
 
         private async Task<string> GetInsertionTextAsync(Document document, CompletionItem item, CancellationToken cancellationToken)
@@ -127,6 +164,14 @@ namespace Microsoft.CodeAnalysis.SpellCheck
         {
             public SpellCheckCodeAction(string title, Func<CancellationToken, Task<Document>> createChangedDocument, string equivalenceKey)
                 : base(title, createChangedDocument, equivalenceKey)
+            {
+            }
+        }
+
+        private class MyCodeAction : CodeAction.CodeActionWithNestedActions
+        {
+            public MyCodeAction(string title, ImmutableArray<CodeAction> nestedActions)
+                : base(title, nestedActions, isInlinable: true)
             {
             }
         }

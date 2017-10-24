@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using Microsoft.VisualStudio.LanguageServices.Implementation.ProjectSystem;
@@ -40,12 +40,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Venus
         public AbstractContainedLanguage(
             AbstractProject project)
         {
-            if (project == null)
-            {
-                throw new ArgumentNullException(nameof(project));
-            }
-
-            this.Project = project;
+            this.Project = project ?? throw new ArgumentNullException(nameof(project));
         }
 
         /// <summary>
@@ -54,12 +49,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Venus
         /// <param name="subjectBuffer"></param>
         protected void SetSubjectBuffer(ITextBuffer subjectBuffer)
         {
-            if (subjectBuffer == null)
-            {
-                throw new ArgumentNullException(nameof(subjectBuffer));
-            }
-
-            this.SubjectBuffer = subjectBuffer;
+            this.SubjectBuffer = subjectBuffer ?? throw new ArgumentNullException(nameof(subjectBuffer));
         }
 
         /// <summary>
@@ -67,12 +57,7 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.Venus
         /// </summary>
         protected void SetDataBuffer(ITextBuffer dataBuffer)
         {
-            if (dataBuffer == null)
-            {
-                throw new ArgumentNullException(nameof(dataBuffer));
-            }
-
-            this.DataBuffer = dataBuffer;
+            this.DataBuffer = dataBuffer ?? throw new ArgumentNullException(nameof(dataBuffer));
         }
 
         public abstract void Dispose();

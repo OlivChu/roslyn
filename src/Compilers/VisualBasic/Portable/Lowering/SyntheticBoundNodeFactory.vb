@@ -8,6 +8,7 @@ Imports System.Linq
 Imports System.Text
 Imports Microsoft.Cci
 Imports Microsoft.CodeAnalysis.CodeGen
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.RuntimeMembers
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.CodeAnalysis.VisualBasic.Emit
@@ -320,7 +321,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         ''' Assignment expressions in lowered form should always have suppressObjectClone = True
         ''' </summary>
         Public Function AssignmentExpression(left As BoundExpression, right As BoundExpression) As BoundAssignmentOperator
-            Debug.Assert(left.Type.IsSameTypeIgnoringCustomModifiers(right.Type) OrElse right.Type.IsErrorType() OrElse left.Type.IsErrorType())
+            Debug.Assert(left.Type.IsSameTypeIgnoringAll(right.Type) OrElse right.Type.IsErrorType() OrElse left.Type.IsErrorType())
             Dim boundNode = New BoundAssignmentOperator(_syntax, left, right, True)
             boundNode.SetWasCompilerGenerated()
             Return boundNode
@@ -355,6 +356,10 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
 
         Public Function Block(locals As ImmutableArray(Of LocalSymbol), ParamArray statements As BoundStatement()) As BoundBlock
             Return Block(locals, ImmutableArray.Create(Of BoundStatement)(statements))
+        End Function
+
+        Public Function StatementList() As BoundStatementList
+            Return StatementList(ImmutableArray(Of BoundStatement).Empty)
         End Function
 
         Public Function StatementList(statements As ImmutableArray(Of BoundStatement)) As BoundStatementList
@@ -470,8 +475,8 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             Return boundNode
         End Function
 
-        Public Function BadExpression(ParamArray subExpressions As BoundNode()) As BoundExpression
-            Dim boundNode = New BoundBadExpression(_syntax, LookupResultKind.Empty, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(Of BoundNode)(subExpressions), ErrorTypeSymbol.UnknownResultType, hasErrors:=True)
+        Public Function BadExpression(ParamArray subExpressions As BoundExpression()) As BoundExpression
+            Dim boundNode = New BoundBadExpression(_syntax, LookupResultKind.Empty, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(subExpressions), ErrorTypeSymbol.UnknownResultType, hasErrors:=True)
             boundNode.SetWasCompilerGenerated()
             Return boundNode
         End Function

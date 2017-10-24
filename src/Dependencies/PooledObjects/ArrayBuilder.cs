@@ -4,10 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
-using Roslyn.Utilities;
-using Microsoft.CodeAnalysis.Collections;
 
-namespace Microsoft.CodeAnalysis
+namespace Microsoft.CodeAnalysis.PooledObjects
 {
     [DebuggerDisplay("Count = {Count,nq}")]
     [DebuggerTypeProxy(typeof(ArrayBuilder<>.DebuggerProxy))]
@@ -102,7 +100,7 @@ namespace Microsoft.CodeAnalysis
         {
             while (index > _builder.Count)
             {
-                _builder.Add(default(T));
+                _builder.Add(default);
             }
 
             if (index == _builder.Count)
@@ -158,6 +156,26 @@ namespace Microsoft.CodeAnalysis
             return _builder.IndexOf(item, startIndex, count);
         }
 
+        public int FindIndex(Predicate<T> match) 
+            => FindIndex(0, this.Count, match);
+
+        public int FindIndex(int startIndex, Predicate<T> match)
+            => FindIndex(startIndex, this.Count - startIndex, match);
+
+        public int FindIndex(int startIndex, int count, Predicate<T> match)
+        {
+            int endIndex = startIndex + count;
+            for (int i = startIndex; i < endIndex; i++)
+            {
+                if (match(_builder[i]))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
         public void RemoveAt(int index)
         {
             _builder.RemoveAt(index);
@@ -182,6 +200,9 @@ namespace Microsoft.CodeAnalysis
         {
             _builder.Sort(comparer);
         }
+
+        public void Sort(Comparison<T> compare)
+            => Sort(Comparer<T>.Create(compare));
 
         public void Sort(int startIndex, IComparer<T> comparer)
         {
@@ -220,7 +241,7 @@ namespace Microsoft.CodeAnalysis
         {
             if (Count == 0)
             {
-                return default(ImmutableArray<T>);
+                return default;
             }
 
             return this.ToImmutable();
@@ -281,7 +302,7 @@ namespace Microsoft.CodeAnalysis
                 // while the chance that we will need their size is diminishingly small.
                 // It makes sense to constrain the size to some "not too small" number. 
                 // Overall perf does not seem to be very sensitive to this number, so I picked 128 as a limit.
-                if (this.Count < 128)
+                if (_builder.Capacity < 128)
                 {
                     if (this.Count != 0)
                     {
@@ -379,9 +400,7 @@ namespace Microsoft.CodeAnalysis
             {
                 var item = this[i];
                 var key = keySelector(item);
-
-                ArrayBuilder<T> bucket;
-                if (!accumulator.TryGetValue(key, out bucket))
+                if (!accumulator.TryGetValue(key, out var bucket))
                 {
                     bucket = ArrayBuilder<T>.GetInstance();
                     accumulator.Add(key, bucket);
@@ -419,6 +438,11 @@ namespace Microsoft.CodeAnalysis
         public void AddRange(ImmutableArray<T> items, int length)
         {
             _builder.AddRange(items, length);
+        }
+
+        public void AddRange<S>(ImmutableArray<S> items) where S : class, T
+        {
+            AddRange(ImmutableArray<T>.CastUp(items));
         }
 
         public void AddRange(T[] items, int start, int length)

@@ -1,9 +1,11 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
+using System.Collections.Generic;
 using System.Threading;
 using Microsoft.CodeAnalysis.CSharp.Extensions;
 using Microsoft.CodeAnalysis.CSharp.Extensions.ContextQuery;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.CSharp.Utilities;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 
 namespace Microsoft.CodeAnalysis.CSharp.Completion.KeywordRecommenders
@@ -17,10 +19,15 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.KeywordRecommenders
 
         protected override bool IsValidContext(int position, CSharpSyntaxContext context, CancellationToken cancellationToken)
         {
+            var syntaxTree = context.SyntaxTree;
             return
                 IsValidContextInForEachClause(context) ||
                 IsValidContextInFromClause(context, cancellationToken) ||
                 IsValidContextInJoinClause(context, cancellationToken) ||
+                syntaxTree.IsParameterModifierContext(position, context.LeftToken, cancellationToken) ||
+                syntaxTree.IsAnonymousMethodParameterModifierContext(position, context.LeftToken, cancellationToken) ||
+                syntaxTree.IsPossibleLambdaParameterModifierContext(position, context.LeftToken, cancellationToken) ||
+                context.TargetToken.IsConstructorOrMethodParameterArgumentContext() ||
                 context.TargetToken.IsTypeParameterVarianceContext();
         }
 
@@ -35,16 +42,15 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.KeywordRecommenders
 
             if (token.Kind() == SyntaxKind.IdentifierToken)
             {
-                var statement = token.Parent as ForEachStatementSyntax;
-                if (statement != null && token == statement.Identifier)
+                if (token.Parent is ForEachStatementSyntax statement && token == statement.Identifier)
                 {
                     return true;
                 }
             }
             else if (token.Kind() == SyntaxKind.CloseParenToken)
             {
-                var statement = token.GetAncestor<ForEachComponentStatementSyntax>();
-                if (statement != null && token.Span.End == statement.VariableComponent.Span.End)
+                var statement = token.GetAncestor<ForEachVariableStatementSyntax>();
+                if (statement != null && token.Span.End == statement.Variable.Span.End)
                 {
                     return true;
                 }
@@ -70,8 +76,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.KeywordRecommenders
                     }
                 }
 
-                var fromClause = token.Parent as FromClauseSyntax;
-                if (fromClause != null)
+                if (token.Parent is FromClauseSyntax fromClause)
                 {
                     // case:
                     //   from int x |

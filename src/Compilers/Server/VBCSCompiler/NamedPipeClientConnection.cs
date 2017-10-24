@@ -136,6 +136,7 @@ namespace Microsoft.CodeAnalysis.CompilerServer
             SecurityIdentifier identifier = WindowsIdentity.GetCurrent().Owner;
             PipeSecurity security = new PipeSecurity();
 
+#if NET46
             // Restrict access to just this account.  
             PipeAccessRule rule = new PipeAccessRule(identifier, PipeAccessRights.ReadWrite | PipeAccessRights.CreateNewInstance, AccessControlType.Allow);
             security.AddAccessRule(rule);
@@ -151,6 +152,24 @@ namespace Microsoft.CodeAnalysis.CompilerServer
                 PipeBufferSize, // Default output buffer
                 security,
                 HandleInheritability.None);
+#else
+            // The overload of NamedPipeServerStream with the PipeAccessRule
+            // parameter was removed in netstandard. However, the default
+            // constructor does not provide WRITE_DAC, so attempting to use
+            // SetAccessControl will always fail. So, completely ignore ACLs on
+            // netcore, and trust that our `ClientAndOurIdentitiesMatch`
+            // verification will catch any invalid connections.
+            // Issue to add WRITE_DAC support:
+            // https://github.com/dotnet/corefx/issues/24040
+            NamedPipeServerStream pipeStream = new NamedPipeServerStream(
+                pipeName,
+                PipeDirection.InOut,
+                NamedPipeServerStream.MaxAllowedServerInstances, // Maximum connections.
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous | PipeOptions.WriteThrough,
+                PipeBufferSize, // Default input buffer
+                PipeBufferSize);// Default output buffer
+#endif
 
             CompilerServerLogger.Log("Successfully constructed pipe '{0}'.", pipeName);
 
@@ -175,30 +194,9 @@ namespace Microsoft.CodeAnalysis.CompilerServer
         ///
         /// This will return true if the pipe was disconnected.
         /// </summary>
-        protected override async Task CreateMonitorDisconnectTask(CancellationToken cancellationToken)
+        protected override Task CreateMonitorDisconnectTask(CancellationToken cancellationToken)
         {
-            var buffer = Array.Empty<byte>();
-
-            while (!cancellationToken.IsCancellationRequested && _pipeStream.IsConnected)
-            {
-                // Wait a second before trying again
-                await Task.Delay(1000, cancellationToken).ConfigureAwait(false);
-
-                try
-                {
-                    CompilerServerLogger.Log($"Pipe {LoggingIdentifier}: Before poking pipe.");
-                    await _pipeStream.ReadAsync(buffer, 0, 0, cancellationToken).ConfigureAwait(false);
-                    CompilerServerLogger.Log($"Pipe {LoggingIdentifier}: After poking pipe.");
-                }
-                catch (Exception e)
-                {
-                    // It is okay for this call to fail.  Errors will be reflected in the 
-                    // IsConnected property which will be read on the next iteration of the 
-                    // loop
-                    var msg = string.Format($"Pipe {LoggingIdentifier}: Error poking pipe.");
-                    CompilerServerLogger.LogException(e, msg);
-                }
-            }
+            return BuildServerConnection.CreateMonitorDisconnectTask(_pipeStream, LoggingIdentifier, cancellationToken);
         }
 
         protected override void ValidateBuildRequest(BuildRequest request)

@@ -1,11 +1,10 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System;
-using System.Collections;
+using System.IO;
 using System.Linq;
-using Roslyn.Utilities;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
+using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.BuildTasks
 {
@@ -181,7 +180,29 @@ namespace Microsoft.CodeAnalysis.BuildTasks
         }
         #endregion
 
+        private DotnetHost _dotnetHostInfo;
+        private DotnetHost DotnetHostInfo
+        {
+            get
+            {
+                if (_dotnetHostInfo is null)
+                {
+                    CommandLineBuilderExtension commandLineBuilder = new CommandLineBuilderExtension();
+                    AddCommandLineCommands(commandLineBuilder);
+                    var commandLine = commandLineBuilder.ToString();
+
+                    _dotnetHostInfo = ManagedCompiler.CreateDotnetHostInfo(ToolPath, ToolExe, ToolName, commandLine);
+                }
+                return _dotnetHostInfo;
+            }
+        }
+
         #region Tool Members
+
+        protected abstract string ToolNameWithoutExtension { get; }
+
+        protected sealed override string ToolName => ManagedCompiler.GenerateToolName(ToolNameWithoutExtension);
+
         protected override int ExecuteTool(string pathToTool, string responseFileCommands, string commandLineCommands)
         {
             if (ProvideCommandLineArgs)
@@ -196,9 +217,7 @@ namespace Microsoft.CodeAnalysis.BuildTasks
 
         protected override string GenerateCommandLineCommands()
         {
-            var commandLineBuilder = new CommandLineBuilderExtension();
-            AddCommandLineCommands(commandLineBuilder);
-            return commandLineBuilder.ToString();
+            return DotnetHostInfo.CommandLineArgs;
         }
 
         /// <summary>
@@ -206,16 +225,11 @@ namespace Microsoft.CodeAnalysis.BuildTasks
         /// </summary>
         protected override string GenerateFullPathToTool()
         {
-            string pathToTool = ToolLocationHelper.GetPathToBuildToolsFile(ToolName, ToolLocationHelper.CurrentToolsVersion);
+            var pathToTool = DotnetHostInfo.PathToToolOpt;
 
-            if (pathToTool == null)
+            if (null == pathToTool)
             {
-                pathToTool = ToolLocationHelper.GetPathToDotNetFrameworkFile(ToolName, TargetDotNetFrameworkVersion.VersionLatest);
-
-                if (pathToTool == null)
-                {
-                    Log.LogErrorWithCodeFromResources("General_FrameworksFileNotFound", ToolName, ToolLocationHelper.GetDotNetFrameworkVersionFolderPrefix(TargetDotNetFrameworkVersion.VersionLatest));
-                }
+                Log.LogErrorWithCodeFromResources("General_ToolFileNotFound", ToolName);
             }
 
             return pathToTool;
@@ -281,8 +295,8 @@ namespace Microsoft.CodeAnalysis.BuildTasks
         /// </summary>
         private string[] GetArguments(string commandLineCommands, string responseFileCommands)
         {
-            var commandLineArguments = CommandLineParser.SplitCommandLineIntoArguments(commandLineCommands, removeHashComments: true);
-            var responseFileArguments = CommandLineParser.SplitCommandLineIntoArguments(responseFileCommands, removeHashComments: true);
+            var commandLineArguments = CommandLineUtilities.SplitCommandLineIntoArguments(commandLineCommands, removeHashComments: true);
+            var responseFileArguments = CommandLineUtilities.SplitCommandLineIntoArguments(responseFileCommands, removeHashComments: true);
             return commandLineArguments.Concat(responseFileArguments).ToArray();
         }
     }

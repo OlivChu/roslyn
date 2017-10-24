@@ -7,6 +7,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Shared.Utilities;
@@ -20,73 +21,76 @@ namespace Microsoft.CodeAnalysis.FindSymbols
         /// Find symbols for members that override the specified member symbol.
         /// </summary>
         public static async Task<IEnumerable<ISymbol>> FindOverridesAsync(
-            ISymbol symbol, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default(CancellationToken))
+            ISymbol symbol, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default)
         {
             var result = await FindOverridesAsync(
                 SymbolAndProjectId.Create(symbol, projectId: null),
                 solution, projects, cancellationToken).ConfigureAwait(false);
 
-            return result.Select(s => s.Symbol).ToList();
+            return result.SelectAsArray(s => s.Symbol);
         }
 
-        internal static async Task<IEnumerable<SymbolAndProjectId>> FindOverridesAsync(
-            SymbolAndProjectId symbolAndProjectId, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default(CancellationToken))
+        internal static async Task<ImmutableArray<SymbolAndProjectId>> FindOverridesAsync(
+            SymbolAndProjectId symbolAndProjectId, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default)
         {
-            // Method can only have overrides if its a virtual, abstract or override and is not
-            // sealed.
-            var symbol = symbolAndProjectId.Symbol;
+            var results = ArrayBuilder<SymbolAndProjectId>.GetInstance();
+
+            var symbol = symbolAndProjectId.Symbol?.OriginalDefinition;
             if (symbol.IsOverridable())
             {
                 // To find the overrides, we need to walk down the type hierarchy and check all
-                // derived types.  TODO(cyrusn): This seems extremely costly.  Is there any way to
-                // speed this up?
-                var containingType = symbol.ContainingType.OriginalDefinition;
+                // derived types.
+                var containingType = symbol.ContainingType;
                 var derivedTypes = await FindDerivedClassesAsync(
                     symbolAndProjectId.WithSymbol(containingType),
                     solution, projects, cancellationToken).ConfigureAwait(false);
 
-                List<SymbolAndProjectId> results = null;
                 foreach (var type in derivedTypes)
                 {
-                    foreach (var m in GetMembers(type, symbol.Name))
+                    foreach (var m in type.Symbol.GetMembers(symbol.Name))
                     {
                         var sourceMember = await FindSourceDefinitionAsync(m, solution, cancellationToken).ConfigureAwait(false);
-                        var bestMember = sourceMember.Symbol != null ? sourceMember : m;
-                        var member = bestMember.Symbol;
-                        if (member != null &&
-                            member.IsOverride &&
-                            member.OverriddenMember() != null &&
-                            OriginalSymbolsMatch(member.OverriddenMember().OriginalDefinition, symbol.OriginalDefinition, solution, cancellationToken))
+                        var bestMember = sourceMember ?? m;
+                        
+                        if (IsOverride(solution, bestMember, symbol, cancellationToken))
                         {
-                            results = results ?? new List<SymbolAndProjectId>();
-                            results.Add(bestMember);
+                            results.Add(new SymbolAndProjectId(bestMember, type.ProjectId));
                         }
                     }
                 }
+            }
 
-                if (results != null)
+            return results.ToImmutableAndFree();
+        }
+
+        private static bool IsOverride(
+            Solution solution, ISymbol member, ISymbol symbol, CancellationToken cancellationToken)
+        {
+            for (var current = member; current != null; current = current.OverriddenMember())
+            {
+                if (OriginalSymbolsMatch(current.OverriddenMember(), symbol.OriginalDefinition, solution, cancellationToken))
                 {
-                    return results;
+                    return true;
                 }
             }
 
-            return SpecializedCollections.EmptyEnumerable<SymbolAndProjectId>();
+            return false;
         }
 
         /// <summary>
         /// Find symbols for declarations that implement members of the specified interface symbol
         /// </summary>
         public static async Task<IEnumerable<ISymbol>> FindImplementedInterfaceMembersAsync(
-            ISymbol symbol, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default(CancellationToken))
+            ISymbol symbol, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default)
         {
             var result = await FindImplementedInterfaceMembersAsync(
                 SymbolAndProjectId.Create(symbol, projectId: null),
                 solution, projects, cancellationToken).ConfigureAwait(false);
-            return result.Select(s => s.Symbol).ToList();
+            return result.SelectAsArray(s => s.Symbol);
         }
 
-        internal static async Task<IEnumerable<SymbolAndProjectId>> FindImplementedInterfaceMembersAsync(
-            SymbolAndProjectId symbolAndProjectId, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default(CancellationToken))
+        internal static async Task<ImmutableArray<SymbolAndProjectId>> FindImplementedInterfaceMembersAsync(
+            SymbolAndProjectId symbolAndProjectId, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default)
         {
             // Member can only implement interface members if it is an explicit member, or if it is
             // public and non static.
@@ -96,7 +100,7 @@ namespace Microsoft.CodeAnalysis.FindSymbols
                 var explicitImplementations = symbol.ExplicitInterfaceImplementations();
                 if (explicitImplementations.Length > 0)
                 {
-                    return explicitImplementations.Select(symbolAndProjectId.WithSymbol);
+                    return explicitImplementations.SelectAsArray(symbolAndProjectId.WithSymbol);
                 }
                 else if (
                     symbol.DeclaredAccessibility == Accessibility.Public && !symbol.IsStatic &&
@@ -106,13 +110,13 @@ namespace Microsoft.CodeAnalysis.FindSymbols
                     // method, even if its containing type doesn't state that it implements the
                     // interface.  For example:
                     //
-                    //  interface IFoo { void Foo(); }
+                    //  interface IGoo { void Goo(); }
                     //
-                    //  class Base { public void Foo(); }
+                    //  class Base { public void Goo(); }
                     //
-                    //  class Derived : Base, IFoo { }
+                    //  class Derived : Base, IGoo { }
                     //
-                    // In this case, Base.Foo *does* implement IFoo.Foo in the context of the type
+                    // In this case, Base.Goo *does* implement IGoo.Goo in the context of the type
                     // Derived.
                     var containingType = symbolAndProjectId.WithSymbol(
                         symbol.ContainingType.OriginalDefinition);
@@ -120,7 +124,7 @@ namespace Microsoft.CodeAnalysis.FindSymbols
                         containingType, solution, projects, cancellationToken).ConfigureAwait(false);
                     var allTypes = derivedClasses.Concat(containingType);
 
-                    List<SymbolAndProjectId> results = null;
+                    var builder = ArrayBuilder<SymbolAndProjectId>.GetInstance();
 
                     foreach (var type in allTypes.Convert<INamedTypeSymbol, ITypeSymbol>())
                     {
@@ -140,8 +144,7 @@ namespace Microsoft.CodeAnalysis.FindSymbols
                                         if (implementation.Symbol != null &&
                                             SymbolEquivalenceComparer.Instance.Equals(implementation.Symbol.OriginalDefinition, symbol.OriginalDefinition))
                                         {
-                                            results = results ?? new List<SymbolAndProjectId>();
-                                            results.Add(bestMethod);
+                                            builder.Add(bestMethod);
                                         }
                                     }
                                 }
@@ -149,14 +152,14 @@ namespace Microsoft.CodeAnalysis.FindSymbols
                         }
                     }
 
-                    if (results != null)
-                    {
-                        return results.Distinct(SymbolAndProjectIdComparer.SymbolEquivalenceInstance);
-                    }
+                    var result = builder.Distinct(SymbolAndProjectIdComparer.SymbolEquivalenceInstance)
+                                        .ToImmutableArray();
+                    builder.Free();
+                    return result;
                 }
             }
 
-            return SpecializedCollections.EmptyEnumerable<SymbolAndProjectId>();
+            return ImmutableArray<SymbolAndProjectId>.Empty;
         }
 
         private static IEnumerable<SymbolAndProjectId> GetMembers(
@@ -181,16 +184,16 @@ namespace Microsoft.CodeAnalysis.FindSymbols
         /// <param name="cancellationToken"></param>
         /// <returns>The derived types of the symbol. The symbol passed in is not included in this list.</returns>
         public static async Task<IEnumerable<INamedTypeSymbol>> FindDerivedClassesAsync(
-            INamedTypeSymbol type, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default(CancellationToken))
+            INamedTypeSymbol type, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default)
         {
             var result = await FindDerivedClassesAsync(
                 SymbolAndProjectId.Create(type, projectId: null),
                 solution, projects, cancellationToken).ConfigureAwait(false);
-            return result.Select(s => s.Symbol).ToList();
+            return result.SelectAsArray(s => s.Symbol);
         }
 
-        internal static Task<IEnumerable<SymbolAndProjectId<INamedTypeSymbol>>> FindDerivedClassesAsync(
-            SymbolAndProjectId<INamedTypeSymbol> typeAndProjectId, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default(CancellationToken))
+        internal static Task<ImmutableArray<SymbolAndProjectId<INamedTypeSymbol>>> FindDerivedClassesAsync(
+            SymbolAndProjectId<INamedTypeSymbol> typeAndProjectId, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default)
         {
             var type = typeAndProjectId.Symbol;
             if (type == null)
@@ -210,34 +213,33 @@ namespace Microsoft.CodeAnalysis.FindSymbols
         /// Finds the symbols that implement an interface or interface member.
         /// </summary>
         public static async Task<IEnumerable<ISymbol>> FindImplementationsAsync(
-            ISymbol symbol, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default(CancellationToken))
+            ISymbol symbol, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default)
         {
             var result = await FindImplementationsAsync(
                 SymbolAndProjectId.Create(symbol, projectId: null),
                 solution, projects, cancellationToken).ConfigureAwait(false);
-            return result.Select(s => s.Symbol).ToList();
+            return result.SelectAsArray(s => s.Symbol);
         }
 
-        internal static async Task<IEnumerable<SymbolAndProjectId>> FindImplementationsAsync(
-            SymbolAndProjectId symbolAndProjectId, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default(CancellationToken))
+        internal static async Task<ImmutableArray<SymbolAndProjectId>> FindImplementationsAsync(
+            SymbolAndProjectId symbolAndProjectId, Solution solution, IImmutableSet<Project> projects = null, CancellationToken cancellationToken = default)
         {
             // A symbol can only have implementations if it's an interface or a
             // method/property/event from an interface.
             var symbol = symbolAndProjectId.Symbol;
-            if (symbol is INamedTypeSymbol)
+            if (symbol is INamedTypeSymbol namedTypeSymbol)
             {
-                var namedTypeSymbol = (INamedTypeSymbol)symbol;
                 var implementingTypes = await DependentTypeFinder.FindTransitivelyImplementingTypesAsync(namedTypeSymbol, solution, projects, cancellationToken).ConfigureAwait(false);
                 return implementingTypes.Select(s => (SymbolAndProjectId)s)
                                         .Where(IsAccessible)
-                                        .ToList();
+                                        .ToImmutableArray();
             }
             else if (symbol.IsImplementableMember())
             {
                 var containingType = symbol.ContainingType.OriginalDefinition;
                 var allTypes = await DependentTypeFinder.FindTransitivelyImplementingTypesAsync(containingType, solution, projects, cancellationToken).ConfigureAwait(false);
 
-                List<SymbolAndProjectId> results = null;
+                ImmutableArray<SymbolAndProjectId>.Builder results = null;
                 foreach (var t in allTypes.Convert<INamedTypeSymbol, ITypeSymbol>())
                 {
                     foreach (var m in t.FindImplementationsForInterfaceMember(symbol, solution.Workspace, cancellationToken))
@@ -246,7 +248,7 @@ namespace Microsoft.CodeAnalysis.FindSymbols
                         var bestDef = sourceDef.Symbol != null ? sourceDef : m;
                         if (IsAccessible(bestDef))
                         {
-                            results = results ?? new List<SymbolAndProjectId>();
+                            results = results ?? ImmutableArray.CreateBuilder<SymbolAndProjectId>();
                             results.Add(bestDef.WithSymbol(bestDef.Symbol.OriginalDefinition));
                         }
                     }
@@ -254,11 +256,12 @@ namespace Microsoft.CodeAnalysis.FindSymbols
 
                 if (results != null)
                 {
-                    return results.Distinct(SymbolAndProjectIdComparer.SymbolEquivalenceInstance);
+                    return results.Distinct(SymbolAndProjectIdComparer.SymbolEquivalenceInstance)
+                                  .ToImmutableArray();
                 }
             }
 
-            return SpecializedCollections.EmptyEnumerable<SymbolAndProjectId>();
+            return ImmutableArray<SymbolAndProjectId>.Empty;
         }
 
         private static bool IsAccessible(SymbolAndProjectId symbolAndProjectId)
@@ -278,7 +281,8 @@ namespace Microsoft.CodeAnalysis.FindSymbols
         /// <summary>
         /// Finds all the callers of a specified symbol.
         /// </summary>
-        public static Task<IEnumerable<SymbolCallerInfo>> FindCallersAsync(ISymbol symbol, Solution solution, CancellationToken cancellationToken = default(CancellationToken))
+        public static Task<IEnumerable<SymbolCallerInfo>> FindCallersAsync(
+            ISymbol symbol, Solution solution, CancellationToken cancellationToken = default)
         {
             return FindCallersAsync(symbol, solution, documents: null, cancellationToken: cancellationToken);
         }
@@ -286,7 +290,7 @@ namespace Microsoft.CodeAnalysis.FindSymbols
         /// <summary>
         /// Finds all the callers of a specified symbol.
         /// </summary>
-        public static async Task<IEnumerable<SymbolCallerInfo>> FindCallersAsync(ISymbol symbol, Solution solution, IImmutableSet<Document> documents, CancellationToken cancellationToken = default(CancellationToken))
+        public static async Task<IEnumerable<SymbolCallerInfo>> FindCallersAsync(ISymbol symbol, Solution solution, IImmutableSet<Document> documents, CancellationToken cancellationToken = default)
         {
             symbol = symbol.OriginalDefinition;
             var foundSymbol = await SymbolFinder.FindSourceDefinitionAsync(symbol, solution, cancellationToken).ConfigureAwait(false);
@@ -297,7 +301,7 @@ namespace Microsoft.CodeAnalysis.FindSymbols
             var directReferences = callReferences.Where(
                 r => SymbolEquivalenceComparer.Instance.Equals(symbol, r.Definition)).FirstOrDefault();
 
-            var indirectReferences = callReferences.Where(r => r != directReferences).ToList();
+            var indirectReferences = callReferences.WhereAsArray(r => r != directReferences);
 
             List<SymbolCallerInfo> results = null;
 
@@ -322,11 +326,11 @@ namespace Microsoft.CodeAnalysis.FindSymbols
             return results ?? SpecializedCollections.EmptyEnumerable<SymbolCallerInfo>();
         }
 
-        private static Task<IEnumerable<ReferencedSymbol>> FindCallReferencesAsync(
+        private static async Task<ImmutableArray<ReferencedSymbol>> FindCallReferencesAsync(
             Solution solution,
             ISymbol symbol,
             IImmutableSet<Document> documents,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             if (symbol != null)
             {
@@ -334,11 +338,13 @@ namespace Microsoft.CodeAnalysis.FindSymbols
                     symbol.Kind == SymbolKind.Method ||
                     symbol.Kind == SymbolKind.Property)
                 {
-                    return SymbolFinder.FindReferencesAsync(symbol, solution, documents, cancellationToken);
+                    var result = await FindReferencesAsync(
+                        symbol, solution, documents, cancellationToken).ConfigureAwait(false);
+                    return result.ToImmutableArray();
                 }
             }
 
-            return SpecializedTasks.EmptyEnumerable<ReferencedSymbol>();
+            return ImmutableArray<ReferencedSymbol>.Empty;
         }
 
         private static bool OriginalSymbolsMatch(
@@ -357,8 +363,7 @@ namespace Microsoft.CodeAnalysis.FindSymbols
                 return false;
             }
 
-            Compilation symbolToMatchCompilation = null;
-            if (!TryGetCompilation(symbolToMatch, solution, out symbolToMatchCompilation, cancellationToken))
+            if (!TryGetCompilation(symbolToMatch, solution, out var symbolToMatchCompilation, cancellationToken))
             {
                 return false;
             }

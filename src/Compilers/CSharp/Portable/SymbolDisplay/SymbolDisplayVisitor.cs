@@ -1,14 +1,14 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.SymbolDisplay;
 using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp
 {
-    internal partial class SymbolDisplayVisitor : AbstractSymbolDisplayVisitor<SemanticModel>
+    internal partial class SymbolDisplayVisitor : AbstractSymbolDisplayVisitor
     {
         private readonly bool _escapeKeywordIdentifiers;
         private IDictionary<INamespaceOrTypeSymbol, IAliasSymbol> _lazyAliasMap;
@@ -37,7 +37,7 @@ namespace Microsoft.CodeAnalysis.CSharp
             _lazyAliasMap = aliasMap;
         }
 
-        protected override AbstractSymbolDisplayVisitor<SemanticModel> MakeNotFirstVisitor()
+        protected override AbstractSymbolDisplayVisitor MakeNotFirstVisitor()
         {
             return new SymbolDisplayVisitor(
                 this.builder,
@@ -178,6 +178,13 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         public override void VisitLocal(ILocalSymbol symbol)
         {
+            if (symbol.IsRef && 
+                format.LocalOptions.IncludesOption(SymbolDisplayLocalOptions.IncludeRef))
+            {
+                AddKeyword(SyntaxKind.RefKeyword);
+                AddSpace();
+            }
+
             if (format.LocalOptions.IncludesOption(SymbolDisplayLocalOptions.IncludeType))
             {
                 symbol.Type.Accept(this);
@@ -197,6 +204,17 @@ namespace Microsoft.CodeAnalysis.CSharp
 
                 AddConstantValue(symbol.Type, symbol.ConstantValue);
             }
+        }
+
+        public override void VisitDiscard(IDiscardSymbol symbol)
+        {
+            if (format.LocalOptions.IncludesOption(SymbolDisplayLocalOptions.IncludeType))
+            {
+                symbol.Type.Accept(this);
+                AddSpace();
+            }
+
+            builder.Add(CreatePart(SymbolDisplayPartKind.Punctuation, symbol, "_"));
         }
 
         public override void VisitRangeVariable(IRangeVariableSymbol symbol)
@@ -278,6 +296,10 @@ namespace Microsoft.CodeAnalysis.CSharp
                     AddKeyword(SyntaxKind.InternalKeyword);
                     break;
                 case Accessibility.ProtectedAndInternal:
+                    AddKeyword(SyntaxKind.PrivateKeyword);
+                    AddSpace();
+                    AddKeyword(SyntaxKind.ProtectedKeyword);
+                    break;
                 case Accessibility.Protected:
                     AddKeyword(SyntaxKind.ProtectedKeyword);
                     break;

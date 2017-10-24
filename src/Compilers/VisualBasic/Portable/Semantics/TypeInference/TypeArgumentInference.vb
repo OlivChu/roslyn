@@ -2,6 +2,7 @@
 
 Imports System.Collections.Immutable
 Imports System.Runtime.InteropServices
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 
 Namespace Microsoft.CodeAnalysis.VisualBasic
@@ -296,7 +297,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                         If firstInferredType Is Nothing Then
                             firstInferredType = currentTypeInfo.ResultType
 
-                        ElseIf Not firstInferredType.IsSameTypeIgnoringCustomModifiers(currentTypeInfo.ResultType) Then
+                        ElseIf Not firstInferredType.IsSameTypeIgnoringAll(currentTypeInfo.ResultType) Then
                             ' Whidbey failed hard here, in Orcas we added dominant type information.
                             Graph.MarkInferenceLevel(InferenceLevel.Orcas)
                         End If
@@ -374,7 +375,8 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                     For Each competitor As DominantTypeDataTypeInference In InferenceTypeCollection.GetTypeDataList()
 
                         ' Do not merge array literals with other expressions
-                        If TypeOf competitor.ResultType IsNot ArrayLiteralTypeSymbol AndAlso type.IsSameTypeIgnoringCustomModifiers(competitor.ResultType) Then
+                        If TypeOf competitor.ResultType IsNot ArrayLiteralTypeSymbol AndAlso type.IsSameTypeIgnoringAll(competitor.ResultType) Then
+                            competitor.ResultType = TypeInferenceCollection.MergeTupleNames(competitor.ResultType, type)
                             competitor.InferenceRestrictions = Conversions.CombineConversionRequirements(
                                                                         competitor.InferenceRestrictions,
                                                                         inferenceRestrictions)
@@ -732,7 +734,7 @@ HandleAsAGeneralExpression:
                 ' The process of populating the graph also seeds type hints for type parameters referenced by explicitly typed
                 ' lambda parameters. Also, hints sometimes have restrictions placed on them that limit what conversions the dominant type
                 ' algorithm can consider when it processes them. The restrictions are generally driven by the context in which type
-                ' parameters are used. For example if a type parameter is used as a type parameter of another type (something like IFoo(of T)),
+                ' parameters are used. For example if a type parameter is used as a type parameter of another type (something like IGoo(of T)),
                 ' then the dominant type algorithm is not allowed to consider any conversions. There are similar restrictions for
                 ' Array co-variance.
 
@@ -995,7 +997,7 @@ HandleAsAGeneralExpression:
                     argIndex = parameterToArgumentMap(paramIndex)
                     Dim argument = If(argIndex = -1, Nothing, arguments(argIndex))
 
-                    If argument Is Nothing OrElse argument.HasErrors OrElse targetType.IsErrorType() Then
+                    If argument Is Nothing OrElse argument.HasErrors OrElse targetType.IsErrorType() OrElse argument.Kind = BoundKind.OmittedArgument Then
                         Continue For
                     End If
 
@@ -1375,12 +1377,8 @@ HandleAsAGeneralExpression:
 
                 If argumentType Is Nothing OrElse argumentType.IsVoidType() Then
                     ' We should never be able to infer a value from something that doesn't provide a value, e.g:
-                    ' Foo(Of T) can't be passed Sub bar(), as in Foo(Bar())  
+                    ' Goo(Of T) can't be passed Sub bar(), as in Goo(Bar())  
                     Return False
-                End If
-
-                If Not RefersToGenericParameterToInferArgumentFor(parameterType) Then
-                    Return True
                 End If
 
                 ' If a generic method is parameterized by T, an argument of type A matching a parameter of type
@@ -1407,11 +1405,13 @@ HandleAsAGeneralExpression:
 
 
                 Dim parameterElementTypes As ImmutableArray(Of TypeSymbol) = Nothing
-                If parameterType.TryGetElementTypesIfTupleOrCompatible(parameterElementTypes) Then
+                Dim argumentElementTypes As ImmutableArray(Of TypeSymbol) = Nothing
 
-                    Dim argumentElementTypes As ImmutableArray(Of TypeSymbol) = Nothing
-                    If Not argumentType.TryGetElementTypesIfTupleOrCompatible(argumentElementTypes) OrElse
-                            parameterElementTypes.Length <> argumentElementTypes.Length Then
+                If parameterType.GetNullableUnderlyingTypeOrSelf().TryGetElementTypesIfTupleOrCompatible(parameterElementTypes) AndAlso
+                   If(parameterType.IsNullableType(), argumentType.GetNullableUnderlyingTypeOrSelf(), argumentType).
+                       TryGetElementTypesIfTupleOrCompatible(argumentElementTypes) Then
+
+                    If parameterElementTypes.Length <> argumentElementTypes.Length Then
                         Return False
                     End If
 
@@ -1437,16 +1437,16 @@ HandleAsAGeneralExpression:
                     Return True
 
                 ElseIf parameterType.Kind = SymbolKind.NamedType Then
-                    ' e.g. handle foo(of T)(x as Bar(Of T)) We need to dig into Bar(Of T)
+                    ' e.g. handle goo(of T)(x as Bar(Of T)) We need to dig into Bar(Of T)
 
-                    Dim parameterTypeAsNamedType = DirectCast(parameterType, NamedTypeSymbol)
+                    Dim parameterTypeAsNamedType = DirectCast(parameterType.GetTupleUnderlyingTypeOrSelf(), NamedTypeSymbol)
 
                     If parameterTypeAsNamedType.IsGenericType Then
 
-                        Dim argumentTypeAsNamedType = If(argumentType.Kind = SymbolKind.NamedType, DirectCast(argumentType, NamedTypeSymbol), Nothing)
+                        Dim argumentTypeAsNamedType = If(argumentType.Kind = SymbolKind.NamedType, DirectCast(argumentType.GetTupleUnderlyingTypeOrSelf(), NamedTypeSymbol), Nothing)
 
                         If argumentTypeAsNamedType IsNot Nothing AndAlso argumentTypeAsNamedType.IsGenericType Then
-                            If argumentTypeAsNamedType.OriginalDefinition.IsSameTypeIgnoringCustomModifiers(parameterTypeAsNamedType.OriginalDefinition) Then
+                            If argumentTypeAsNamedType.OriginalDefinition.IsSameTypeIgnoringAll(parameterTypeAsNamedType.OriginalDefinition) Then
 
                                 Do
 
@@ -1629,6 +1629,10 @@ HandleAsAGeneralExpression:
                 inferenceRestrictions As RequiredConversion
             ) As Boolean
 
+                If Not RefersToGenericParameterToInferArgumentFor(parameterType) Then
+                    Return True
+                End If
+
                 ' First try to the things directly. Only if this fails will we bother searching for things like List->IEnumerable.
                 Dim Inferred As Boolean = InferTypeArgumentsFromArgumentDirectly(
                     argumentLocation,
@@ -1775,7 +1779,6 @@ HandleAsAGeneralExpression:
                             param,
                             digThroughToBasesAndImplements,
                             inferenceRestrictions)
-
             End Function
 
             Private Function FindMatchingBase(
@@ -1808,7 +1811,7 @@ HandleAsAGeneralExpression:
                     Return False
                 End If
 
-                If baseSearchType.IsSameTypeIgnoringCustomModifiers(fixedType) Then
+                If baseSearchType.IsSameTypeIgnoringAll(fixedType) Then
                     ' If the types checked were already identical, then exit
                     Return False
                 End If
@@ -1838,7 +1841,7 @@ HandleAsAGeneralExpression:
                 If match Is Nothing Then
                     match = type
                     Return True
-                ElseIf match.IsSameTypeIgnoringCustomModifiers(type) Then
+                ElseIf match.IsSameTypeIgnoringAll(type) Then
                     Return True
                 Else
                     match = Nothing
@@ -1854,7 +1857,7 @@ HandleAsAGeneralExpression:
                 Select Case derivedType.Kind
                     Case SymbolKind.TypeParameter
                         For Each constraint In DirectCast(derivedType, TypeParameterSymbol).ConstraintTypesWithDefinitionUseSiteDiagnostics(Me.UseSiteDiagnostics)
-                            If constraint.OriginalDefinition.IsSameTypeIgnoringCustomModifiers(baseInterface.OriginalDefinition) Then
+                            If constraint.OriginalDefinition.IsSameTypeIgnoringAll(baseInterface.OriginalDefinition) Then
                                 If Not SetMatchIfNothingOrEqual(constraint, match) Then
                                     Return False
                                 End If
@@ -1867,7 +1870,7 @@ HandleAsAGeneralExpression:
 
                     Case Else
                         For Each [interface] In derivedType.AllInterfacesWithDefinitionUseSiteDiagnostics(Me.UseSiteDiagnostics)
-                            If [interface].OriginalDefinition.IsSameTypeIgnoringCustomModifiers(baseInterface.OriginalDefinition) Then
+                            If [interface].OriginalDefinition.IsSameTypeIgnoringAll(baseInterface.OriginalDefinition) Then
                                 If Not SetMatchIfNothingOrEqual([interface], match) Then
                                     Return False
                                 End If
@@ -1886,7 +1889,7 @@ HandleAsAGeneralExpression:
                 Select Case derivedType.Kind
                     Case SymbolKind.TypeParameter
                         For Each constraint In DirectCast(derivedType, TypeParameterSymbol).ConstraintTypesWithDefinitionUseSiteDiagnostics(Me.UseSiteDiagnostics)
-                            If constraint.OriginalDefinition.IsSameTypeIgnoringCustomModifiers(baseClass.OriginalDefinition) Then
+                            If constraint.OriginalDefinition.IsSameTypeIgnoringAll(baseClass.OriginalDefinition) Then
                                 If Not SetMatchIfNothingOrEqual(constraint, match) Then
                                     Return False
                                 End If
@@ -1904,7 +1907,7 @@ HandleAsAGeneralExpression:
                         Dim baseType As NamedTypeSymbol = derivedType.BaseTypeWithDefinitionUseSiteDiagnostics(Me.UseSiteDiagnostics)
 
                         While baseType IsNot Nothing
-                            If baseType.OriginalDefinition.IsSameTypeIgnoringCustomModifiers(baseClass.OriginalDefinition) Then
+                            If baseType.OriginalDefinition.IsSameTypeIgnoringAll(baseClass.OriginalDefinition) Then
                                 If Not SetMatchIfNothingOrEqual(baseType, match) Then
                                     Return False
                                 End If
@@ -2150,7 +2153,7 @@ HandleAsAGeneralExpression:
                             Dim unboundLambda = DirectCast(argument, UnboundLambda)
 
                             If unboundLambda.IsFunctionLambda Then
-                                Dim inferenceSignature As New UnboundLambda.TargetSignature(delegateParams, unboundLambda.Binder.Compilation.GetSpecialType(SpecialType.System_Void))
+                                Dim inferenceSignature As New UnboundLambda.TargetSignature(delegateParams, unboundLambda.Binder.Compilation.GetSpecialType(SpecialType.System_Void), returnsByRef:=False)
                                 Dim returnTypeInfo As KeyValuePair(Of TypeSymbol, ImmutableArray(Of Diagnostic)) = unboundLambda.InferReturnType(inferenceSignature)
 
                                 If Not returnTypeInfo.Value.IsDefault AndAlso returnTypeInfo.Value.HasAnyErrors() Then
@@ -2168,8 +2171,9 @@ HandleAsAGeneralExpression:
 
                                 Else
                                     Dim boundLambda As BoundLambda = unboundLambda.Bind(New UnboundLambda.TargetSignature(inferenceSignature.ParameterTypes,
-                                                                                                                          inferenceSignature.IsByRef,
-                                                                                                                          returnTypeInfo.Key))
+                                                                                                                          inferenceSignature.ParameterIsByRef,
+                                                                                                                          returnTypeInfo.Key,
+                                                                                                                          returnsByRef:=False))
 
                                     Debug.Assert(boundLambda.LambdaSymbol.ReturnType Is returnTypeInfo.Key)
                                     If Not boundLambda.HasErrors AndAlso Not boundLambda.Diagnostics.HasAnyErrors Then
@@ -2212,7 +2216,7 @@ HandleAsAGeneralExpression:
                                     Dim lambdaReturnNamedType = DirectCast(lambdaReturnType, NamedTypeSymbol)
                                     Dim returnNamedType = DirectCast(returnType, NamedTypeSymbol)
                                     If lambdaReturnNamedType.Arity = 1 AndAlso
-                                            IsSameTypeIgnoringCustomModifiers(lambdaReturnNamedType.OriginalDefinition,
+                                            IsSameTypeIgnoringAll(lambdaReturnNamedType.OriginalDefinition,
                                                                               returnNamedType.OriginalDefinition) Then
 
                                         ' We can assume that the lambda will have return type Task(Of T) or IEnumerable(Of T)
@@ -2235,7 +2239,8 @@ HandleAsAGeneralExpression:
 
                                 If Not invokeMethod.IsSub AndAlso (unboundLambda.Flags And SourceMemberFlags.Async) <> 0 Then
                                     Dim boundLambda As BoundLambda = unboundLambda.Bind(New UnboundLambda.TargetSignature(delegateParams,
-                                                                            unboundLambda.Binder.Compilation.GetSpecialType(SpecialType.System_Void)))
+                                                                            unboundLambda.Binder.Compilation.GetSpecialType(SpecialType.System_Void),
+                                                                            returnsByRef:=False))
 
                                     If Not boundLambda.HasErrors AndAlso Not boundLambda.Diagnostics.HasAnyErrors() Then
                                         If _asyncLambdaSubToFunctionMismatch Is Nothing Then

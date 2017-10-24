@@ -3,11 +3,14 @@
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
+using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Execution;
 using Microsoft.CodeAnalysis.Host;
 using Microsoft.CodeAnalysis.Internal.Log;
+using Microsoft.CodeAnalysis.Text;
 using Roslyn.Utilities;
 
-namespace Microsoft.CodeAnalysis.Execution
+namespace Microsoft.CodeAnalysis.Serialization
 {
     /// <summary>
     /// serialize and deserialize objects to straem.
@@ -19,64 +22,171 @@ namespace Microsoft.CodeAnalysis.Execution
     internal partial class Serializer
     {
         private readonly HostWorkspaceServices _workspaceServices;
+
+        private readonly IReferenceSerializationService _hostSerializationService;
+        private readonly ITemporaryStorageService2 _tempService;
+        private readonly ITextFactoryService _textService;
+
         private readonly ConcurrentDictionary<string, IOptionsSerializationService> _lazyLanguageSerializationService;
 
-        public readonly IReferenceSerializationService HostSerializationService;
+        public Serializer(Solution solution) : this(solution.Workspace)
+        {
+        }
+
+        public Serializer(Workspace workspace) : this(workspace.Services)
+        {
+        }
 
         public Serializer(HostWorkspaceServices workspaceServices)
         {
             _workspaceServices = workspaceServices;
 
-            HostSerializationService = _workspaceServices.GetService<IReferenceSerializationService>();
-            _lazyLanguageSerializationService = new ConcurrentDictionary<string, IOptionsSerializationService>(concurrencyLevel: 2, capacity: _workspaceServices.SupportedLanguages.Count());
+            _hostSerializationService = _workspaceServices.GetService<IReferenceSerializationService>();
+            _tempService = _workspaceServices.GetService<ITemporaryStorageService>() as ITemporaryStorageService2;
+            _textService = _workspaceServices.GetService<ITextFactoryService>();
 
-            // TODO: figure out how to support Serialize like the way Deserialize work. tried once, couldn't figure out since
-            //       different kind of data require different number of data to serialize it. that is required so that we don't hold on
-            //       to any red node.
+            _lazyLanguageSerializationService = new ConcurrentDictionary<string, IOptionsSerializationService>(concurrencyLevel: 2, capacity: _workspaceServices.SupportedLanguages.Count());
         }
 
-        public T Deserialize<T>(string kind, ObjectReader reader, CancellationToken cancellationToken)
+        public Checksum CreateChecksum(object value, CancellationToken cancellationToken)
         {
-            using (Logger.LogBlock(FunctionId.Serializer_Deserialize, kind, cancellationToken))
+            var kind = value.GetWellKnownSynchronizationKind();
+
+            using (Logger.LogBlock(FunctionId.Serializer_CreateChecksum, kind.ToStringFast(), cancellationToken))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (value is IChecksummedObject)
+                {
+                    return ((IChecksummedObject)value).Checksum;
+                }
+
+                switch (kind)
+                {
+                    case WellKnownSynchronizationKind.Null:
+                        return Checksum.Null;
+
+                    case WellKnownSynchronizationKind.CompilationOptions:
+                    case WellKnownSynchronizationKind.ParseOptions:
+                    case WellKnownSynchronizationKind.ProjectReference:
+                        return Checksum.Create(kind, value, this);
+
+                    case WellKnownSynchronizationKind.MetadataReference:
+                        return Checksum.Create(kind, _hostSerializationService.CreateChecksum((MetadataReference)value, cancellationToken));
+
+                    case WellKnownSynchronizationKind.AnalyzerReference:
+                        return Checksum.Create(kind, _hostSerializationService.CreateChecksum((AnalyzerReference)value, cancellationToken));
+
+                    case WellKnownSynchronizationKind.SourceText:
+                        return Checksum.Create(kind, ((SourceText)value).GetChecksum());
+
+                    default:
+                        // object that is not part of solution is not supported since we don't know what inputs are required to
+                        // serialize it
+                        throw ExceptionUtilities.UnexpectedValue(kind);
+                }
+            }
+        }
+
+        public void Serialize(object value, ObjectWriter writer, CancellationToken cancellationToken)
+        {
+            var kind = value.GetWellKnownSynchronizationKind();
+
+            using (Logger.LogBlock(FunctionId.Serializer_Serialize, kind.ToString(), cancellationToken))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (value is ChecksumWithChildren)
+                {
+                    SerializeChecksumWithChildren((ChecksumWithChildren)value, writer, cancellationToken);
+                    return;
+                }
+
+                switch (kind)
+                {
+                    case WellKnownSynchronizationKind.Null:
+                        // do nothing
+                        return;
+
+                    case WellKnownSynchronizationKind.SolutionAttributes:
+                    case WellKnownSynchronizationKind.ProjectAttributes:
+                    case WellKnownSynchronizationKind.DocumentAttributes:
+                        ((IObjectWritable)value).WriteTo(writer);
+                        return;
+
+                    case WellKnownSynchronizationKind.CompilationOptions:
+                        SerializeCompilationOptions((CompilationOptions)value, writer, cancellationToken);
+                        return;
+
+                    case WellKnownSynchronizationKind.ParseOptions:
+                        SerializeParseOptions((ParseOptions)value, writer, cancellationToken);
+                        return;
+
+                    case WellKnownSynchronizationKind.ProjectReference:
+                        SerializeProjectReference((ProjectReference)value, writer, cancellationToken);
+                        return;
+
+                    case WellKnownSynchronizationKind.MetadataReference:
+                        SerializeMetadataReference((MetadataReference)value, writer, cancellationToken);
+                        return;
+
+                    case WellKnownSynchronizationKind.AnalyzerReference:
+                        SerializeAnalyzerReference((AnalyzerReference)value, writer, usePathFromAssembly: true, cancellationToken: cancellationToken);
+                        return;
+
+                    case WellKnownSynchronizationKind.SourceText:
+                        SerializeSourceText(storage: null, text: (SourceText)value, writer: writer, cancellationToken: cancellationToken);
+                        return;
+
+                    default:
+                        // object that is not part of solution is not supported since we don't know what inputs are required to
+                        // serialize it
+                        throw ExceptionUtilities.UnexpectedValue(kind);
+                }
+            }
+        }
+
+        public T Deserialize<T>(WellKnownSynchronizationKind kind, ObjectReader reader, CancellationToken cancellationToken)
+        {
+            using (Logger.LogBlock(FunctionId.Serializer_Deserialize, kind.ToString(), cancellationToken))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 switch (kind)
                 {
-                    case SolutionChecksumObject.Name:
-                        return (T)(object)DeserializeChecksumObjectWithChildren(reader, cancellationToken);
-                    case ProjectChecksumObject.Name:
-                        return (T)(object)DeserializeChecksumObjectWithChildren(reader, cancellationToken);
-                    case DocumentChecksumObject.Name:
-                        return (T)(object)DeserializeChecksumObjectWithChildren(reader, cancellationToken);
+                    case WellKnownSynchronizationKind.Null:
+                        return default;
 
-                    case WellKnownChecksumObjects.Projects:
-                    case WellKnownChecksumObjects.Documents:
-                    case WellKnownChecksumObjects.TextDocuments:
-                    case WellKnownChecksumObjects.ProjectReferences:
-                    case WellKnownChecksumObjects.MetadataReferences:
-                    case WellKnownChecksumObjects.AnalyzerReferences:
-                        return (T)(object)DeserializeChecksumObjectWithChildren(reader, cancellationToken);
+                    case WellKnownSynchronizationKind.SolutionState:
+                    case WellKnownSynchronizationKind.ProjectState:
+                    case WellKnownSynchronizationKind.DocumentState:
+                    case WellKnownSynchronizationKind.Projects:
+                    case WellKnownSynchronizationKind.Documents:
+                    case WellKnownSynchronizationKind.TextDocuments:
+                    case WellKnownSynchronizationKind.ProjectReferences:
+                    case WellKnownSynchronizationKind.MetadataReferences:
+                    case WellKnownSynchronizationKind.AnalyzerReferences:
+                        return (T)(object)DeserializeChecksumWithChildren(reader, cancellationToken);
 
-                    case WellKnownChecksumObjects.SolutionChecksumObjectInfo:
-                        return (T)(object)DeserializeSolutionChecksumObjectInfo(reader, cancellationToken);
-                    case WellKnownChecksumObjects.ProjectChecksumObjectInfo:
-                        return (T)(object)DeserializeProjectChecksumObjectInfo(reader, cancellationToken);
-                    case WellKnownChecksumObjects.DocumentChecksumObjectInfo:
-                        return (T)(object)DeserializeDocumentChecksumObjectInfo(reader, cancellationToken);
-                    case WellKnownChecksumObjects.CompilationOptions:
+                    case WellKnownSynchronizationKind.SolutionAttributes:
+                        return (T)(object)SolutionInfo.SolutionAttributes.ReadFrom(reader);
+                    case WellKnownSynchronizationKind.ProjectAttributes:
+                        return (T)(object)ProjectInfo.ProjectAttributes.ReadFrom(reader);
+                    case WellKnownSynchronizationKind.DocumentAttributes:
+                        return (T)(object)DocumentInfo.DocumentAttributes.ReadFrom(reader);
+                    case WellKnownSynchronizationKind.CompilationOptions:
                         return (T)(object)DeserializeCompilationOptions(reader, cancellationToken);
-                    case WellKnownChecksumObjects.ParseOptions:
+                    case WellKnownSynchronizationKind.ParseOptions:
                         return (T)(object)DeserializeParseOptions(reader, cancellationToken);
-                    case WellKnownChecksumObjects.ProjectReference:
+                    case WellKnownSynchronizationKind.ProjectReference:
                         return (T)(object)DeserializeProjectReference(reader, cancellationToken);
-                    case WellKnownChecksumObjects.MetadataReference:
+                    case WellKnownSynchronizationKind.MetadataReference:
                         return (T)(object)DeserializeMetadataReference(reader, cancellationToken);
-                    case WellKnownChecksumObjects.AnalyzerReference:
+                    case WellKnownSynchronizationKind.AnalyzerReference:
                         return (T)(object)DeserializeAnalyzerReference(reader, cancellationToken);
-                    case WellKnownChecksumObjects.SourceText:
+                    case WellKnownSynchronizationKind.SourceText:
                         return (T)(object)DeserializeSourceText(reader, cancellationToken);
-                    case WellKnownChecksumObjects.OptionSet:
+                    case WellKnownSynchronizationKind.OptionSet:
                         return (T)(object)DeserializeOptionSet(reader, cancellationToken);
 
                     default:

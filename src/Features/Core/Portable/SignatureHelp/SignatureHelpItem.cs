@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -69,7 +69,9 @@ namespace Microsoft.CodeAnalysis.SignatureHelp
             IEnumerable<SignatureHelpParameter> parameters,
             IEnumerable<SymbolDisplayPart> descriptionParts)
             : this(isVariadic,
-                  c => documentationFactory(c).ToTaggedText(), 
+                  documentationFactory != null 
+                    ? c => documentationFactory(c).ToTaggedText()
+                    : s_emptyDocumentationFactory, 
                   prefixParts.ToTaggedText(),
                   separatorParts.ToTaggedText(),
                   suffixParts.ToTaggedText(),

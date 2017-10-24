@@ -3,6 +3,7 @@
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis.CodeGen;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Roslyn.Utilities;
 
 namespace Microsoft.CodeAnalysis.CSharp.Symbols
 {
@@ -24,6 +25,11 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         {
             get;
         }
+
+        /// <summary>
+        /// Syntax node that is used as the scope designator. Otherwise, null.
+        /// </summary>
+        internal abstract SyntaxNode ScopeDesignatorOpt { get; }
 
         internal abstract LocalSymbol WithSynthesizedLocalKindAndSyntax(SynthesizedLocalKind kind, SyntaxNode syntax);
 
@@ -228,17 +234,6 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
         }
 
         /// <summary>
-        /// Returns true if this local variable is declared in for-initializer
-        /// </summary>
-        public bool IsFor
-        {
-            get
-            {
-                return this.DeclarationKind == LocalDeclarationKind.ForInitializerVariable;
-            }
-        }
-
-        /// <summary>
         /// Returns true if this local variable is declared as iteration variable
         /// </summary>
         public bool IsForEach
@@ -273,7 +268,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
                     case LocalDeclarationKind.UsingVariable:
                         return false;
                     default:
-                        return true;
+                        return RefKind != RefKind.RefReadOnly;
                 }
             }
         }
@@ -326,19 +321,24 @@ namespace Microsoft.CodeAnalysis.CSharp.Symbols
 
         internal abstract ImmutableArray<Diagnostic> GetConstantValueDiagnostics(BoundExpression boundInitValue);
 
+        public bool IsRef => RefKind == RefKind.Ref;
+
         internal abstract RefKind RefKind
         {
             get;
         }
 
-        internal virtual bool IsReturnable
-        {
-            get
-            {
-                // by default all locals are returnable
-                return true;
-            }
-        }
+        /// <summary>
+        /// Returns the scope to which a local can "escape" ref assignments or other form of aliasing
+        /// Makes sense only for locals with formal scopes - i.e. source locals
+        /// </summary>
+        internal virtual uint RefEscapeScope => throw ExceptionUtilities.Unreachable;
+
+        /// <summary>
+        /// Returns the scope to which values of a local can "escape" via ordinary assignments
+        /// Makes sense only for ref-like locals with formal scopes - i.e. source locals
+        /// </summary>
+        internal virtual uint ValEscapeScope => throw ExceptionUtilities.Unreachable;
 
         /// <summary>
         /// When a local variable's type is inferred, it may not be used in the

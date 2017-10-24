@@ -1,7 +1,9 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Collections.Immutable;
 using System.Threading;
+using Microsoft.CodeAnalysis.Options;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Structure;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Utilities;
@@ -12,7 +14,10 @@ namespace Microsoft.CodeAnalysis.CSharp.Structure.MetadataAsSource
         where TSyntaxNode : SyntaxNode
     {
         protected override void CollectBlockSpans(
-            TSyntaxNode node, ImmutableArray<BlockSpan>.Builder spans, CancellationToken cancellationToken)
+            TSyntaxNode node,
+            ArrayBuilder<BlockSpan> spans,
+            OptionSet options,
+            CancellationToken cancellationToken)
         {
             var startToken = node.GetFirstToken();
             var endToken = GetEndToken(node);
@@ -35,6 +40,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Structure.MetadataAsSource
 
                 spans.Add(new BlockSpan(
                     isCollapsible: true,
+                    type: BlockTypes.Comment,
                     textSpan: TextSpan.FromBounds(startPosition, endPosition),
                     hintSpan: TextSpan.FromBounds(startPosition, hintTextEndToken.Span.End),
                     bannerText: CSharpStructureHelpers.Ellipsis,

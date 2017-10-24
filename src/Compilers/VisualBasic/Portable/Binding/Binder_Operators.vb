@@ -304,7 +304,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             If intrinsicOperatorType = SpecialType.None Then
                 ' Must be a bitwise operation with enum type.
                 Debug.Assert(leftType.GetNullableUnderlyingTypeOrSelf().IsEnumType() AndAlso
-                             leftType.GetNullableUnderlyingTypeOrSelf().IsSameTypeIgnoringCustomModifiers(rightType.GetNullableUnderlyingTypeOrSelf()))
+                             leftType.GetNullableUnderlyingTypeOrSelf().IsSameTypeIgnoringAll(rightType.GetNullableUnderlyingTypeOrSelf()))
 
                 If (operatorKind And BinaryOperatorKind.Lifted) = 0 OrElse leftType.IsNullableType() Then
                     operandType = leftType
@@ -446,8 +446,16 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 End If
             End If
 
+            Dim beforeConversion As BoundExpression = left
             left = ApplyConversion(left.Syntax, operandType, left, explicitSemanticForConcatArgument, diagnostics,
                                    explicitSemanticForConcatArgument:=explicitSemanticForConcatArgument)
+
+            If explicitSemanticForConcatArgument AndAlso left IsNot beforeConversion AndAlso left.Kind = BoundKind.Conversion Then
+                Dim conversion = DirectCast(left, BoundConversion)
+                left = conversion.Update(conversion.Operand, conversion.ConversionKind, conversion.Checked, explicitCastInCode:=False,
+                                         constantValueOpt:=conversion.ConstantValueOpt, extendedInfoOpt:=conversion.ExtendedInfoOpt,
+                                         type:=conversion.Type)
+            End If
 
             If (preliminaryOperatorKind = BinaryOperatorKind.LeftShift OrElse preliminaryOperatorKind = BinaryOperatorKind.RightShift) AndAlso
                 Not operandType.IsObjectType() Then
@@ -465,8 +473,17 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
 
                 right = ApplyImplicitConversion(right.Syntax, rightTargetType, right, diagnostics)
             Else
+                beforeConversion = right
+
                 right = ApplyConversion(right.Syntax, operandType, right, explicitSemanticForConcatArgument, diagnostics,
                                         explicitSemanticForConcatArgument:=explicitSemanticForConcatArgument)
+
+                If explicitSemanticForConcatArgument AndAlso right IsNot beforeConversion AndAlso right.Kind = BoundKind.Conversion Then
+                    Dim conversion = DirectCast(right, BoundConversion)
+                    right = conversion.Update(conversion.Operand, conversion.ConversionKind, conversion.Checked, explicitCastInCode:=False,
+                                              constantValueOpt:=conversion.ConstantValueOpt, extendedInfoOpt:=conversion.ExtendedInfoOpt,
+                                              type:=conversion.Type)
+                End If
             End If
 
             If (operatorKind And BinaryOperatorKind.OpMask) = BinaryOperatorKind.Add AndAlso operatorResultType.IsStringType() Then
@@ -652,8 +669,8 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                 bitwiseKind = bitwiseKind Or BinaryOperatorKind.Lifted
             End If
 
-            If Not operatorType.IsSameTypeIgnoringCustomModifiers(bitwiseCandidate.Parameters(0).Type) OrElse
-               Not operatorType.IsSameTypeIgnoringCustomModifiers(bitwiseCandidate.Parameters(1).Type) Then
+            If Not operatorType.IsSameTypeIgnoringAll(bitwiseCandidate.Parameters(0).Type) OrElse
+               Not operatorType.IsSameTypeIgnoringAll(bitwiseCandidate.Parameters(1).Type) Then
                 ReportDiagnostic(diagnostics, node, ERRID.ERR_UnacceptableLogicalOperator3,
                                  bitwiseCandidate.UnderlyingSymbol,
                                  bitwiseCandidate.UnderlyingSymbol.ContainingType,
@@ -704,7 +721,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             Dim checkCandidate As OverloadResolution.Candidate = leftCheckOperator.BestResult.Value.Candidate
             Debug.Assert(checkCandidate.ReturnType.IsBooleanType() OrElse checkCandidate.ReturnType.IsNullableOfBoolean())
 
-            If Not operatorType.IsSameTypeIgnoringCustomModifiers(checkCandidate.Parameters(0).Type) Then
+            If Not operatorType.IsSameTypeIgnoringAll(checkCandidate.Parameters(0).Type) Then
                 ReportDiagnostic(diagnostics, node, ERRID.ERR_BinaryOperands3,
                                  SyntaxFacts.GetText(If(opKind = BinaryOperatorKind.AndAlso, SyntaxKind.AndAlsoKeyword, SyntaxKind.OrElseKeyword)),
                                  left.Type, right.Type)

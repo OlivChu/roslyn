@@ -1,5 +1,6 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
@@ -14,7 +15,6 @@ using Microsoft.CodeAnalysis.Options;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Utilities;
-using System;
 
 namespace Microsoft.CodeAnalysis.CSharp.Completion.Providers
 {
@@ -23,6 +23,9 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.Providers
         private const string EqualsString = "=";
         private const string SpaceEqualsString = " =";
         private const string ColonString = ":";
+
+        private static readonly CompletionItemRules _spaceItemFilterRule = CompletionItemRules.Default.WithFilterCharacterRule(
+            CharacterSetModificationRule.Create(CharacterSetModificationKind.Remove, ' '));
 
         internal override bool IsInsertionTrigger(SourceText text, int characterPosition, OptionSet options)
         {
@@ -63,7 +66,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.Providers
 
             // We actually want to collect two sets of named parameters to present the user.  The
             // normal named parameters that come from the attribute constructors.  These will be
-            // presented like "foo:".  And also the named parameters that come from the writable
+            // presented like "goo:".  And also the named parameters that come from the writable
             // fields/properties in the attribute.  These will be presented like "bar =".  
 
             var existingNamedParameters = GetExistingNamedParameters(attributeArgumentList, position);
@@ -135,22 +138,24 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.Providers
             return false;
         }
 
-        private async Task<IEnumerable<CompletionItem>> GetNameEqualsItemsAsync(CompletionContext context, SemanticModel semanticModel,
+        private async Task<ImmutableArray<CompletionItem>> GetNameEqualsItemsAsync(
+            CompletionContext context, SemanticModel semanticModel,
             SyntaxToken token, AttributeSyntax attributeSyntax, ISet<string> existingNamedParameters)
         {
             var attributeNamedParameters = GetAttributeNamedParameters(semanticModel, context.Position, attributeSyntax, context.CancellationToken);
             var unspecifiedNamedParameters = attributeNamedParameters.Where(p => !existingNamedParameters.Contains(p.Name));
 
             var text = await semanticModel.SyntaxTree.GetTextAsync(context.CancellationToken).ConfigureAwait(false);
-            return from p in attributeNamedParameters
-                   where !existingNamedParameters.Contains(p.Name)
-                   select SymbolCompletionItem.Create(
+            var q = from p in attributeNamedParameters
+                    where !existingNamedParameters.Contains(p.Name)
+                    select SymbolCompletionItem.CreateWithSymbolId(
                        displayText: p.Name.ToIdentifierToken().ToString() + SpaceEqualsString,
                        insertionText: null,
-                       symbol: p,
+                       symbols: ImmutableArray.Create(p),
                        contextPosition: token.SpanStart,
                        sortText: p.Name,
-                       rules: CompletionItemRules.Default);
+                       rules: _spaceItemFilterRule);
+            return q.ToImmutableArray();
         }
 
         private async Task<IEnumerable<CompletionItem>> GetNameColonItemsAsync(
@@ -163,19 +168,17 @@ namespace Microsoft.CodeAnalysis.CSharp.Completion.Providers
             return from pl in parameterLists
                    from p in pl
                    where !existingNamedParameters.Contains(p.Name)
-                   select SymbolCompletionItem.Create(
+                   select SymbolCompletionItem.CreateWithSymbolId(
                        displayText: p.Name.ToIdentifierToken().ToString() + ColonString,
                        insertionText: null,
-                       symbol: p,
+                       symbols: ImmutableArray.Create(p),
                        contextPosition: token.SpanStart,
                        sortText: p.Name,
                        rules: CompletionItemRules.Default);
         }
 
-        public override Task<CompletionDescription> GetDescriptionAsync(Document document, CompletionItem item, CancellationToken cancellationToken)
-        {
-            return SymbolCompletionItem.GetDescriptionAsync(item, document, cancellationToken);
-        }
+        protected override Task<CompletionDescription> GetDescriptionWorkerAsync(Document document, CompletionItem item, CancellationToken cancellationToken)
+            => SymbolCompletionItem.GetDescriptionAsync(item, document, cancellationToken);
 
         private bool IsValid(ImmutableArray<IParameterSymbol> parameterList, ISet<string> existingNamedParameters)
         {

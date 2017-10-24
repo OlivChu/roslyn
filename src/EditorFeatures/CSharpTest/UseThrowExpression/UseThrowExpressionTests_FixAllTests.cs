@@ -12,22 +12,28 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.UseThrowExpression
         [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseThrowExpression)]
         public async Task FixAllInDocument1()
         {
-            await TestAsync(
-@"
-using System;
+            await TestInRegularAndScriptAsync(
+@"using System;
 
 class C
 {
     void M(string s, string t)
     {
-        if (s == null) { {|FixAllInDocument:throw|} new ArgumentNullException(nameof(s)); }
-        if (t == null) { throw new ArgumentNullException(nameof(t)); }
+        if (s == null)
+        {
+            {|FixAllInDocument:throw|} new ArgumentNullException(nameof(s));
+        }
+
+        if (t == null)
+        {
+            throw new ArgumentNullException(nameof(t));
+        }
+
         _s = s;
         _t = t;
     }
 }",
-@"
-using System;
+@"using System;
 
 class C
 {
@@ -42,22 +48,28 @@ class C
         [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseThrowExpression)]
         public async Task FixAllInDocument2()
         {
-            await TestAsync(
-@"
-using System;
+            await TestInRegularAndScriptAsync(
+@"using System;
 
 class C
 {
     void M(string s, string t)
     {
-        if (s == null) { throw new ArgumentNullException(nameof(s)); }
-        if (t == null) { {|FixAllInDocument:throw|} new ArgumentNullException(nameof(t)); }
+        if (s == null)
+        {
+            throw new ArgumentNullException(nameof(s));
+        }
+
+        if (t == null)
+        {
+            {|FixAllInDocument:throw|} new ArgumentNullException(nameof(t));
+        }
+
         _s = s;
         _t = t;
     }
 }",
-@"
-using System;
+@"using System;
 
 class C
 {
@@ -72,22 +84,28 @@ class C
         [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseThrowExpression)]
         public async Task FixAllInDocument3()
         {
-            await TestAsync(
-@"
-using System;
+            await TestInRegularAndScriptAsync(
+@"using System;
 
 class C
 {
     void M(string s, string t)
     {
-        {|FixAllInDocument:if|} (s == null) { throw new ArgumentNullException(nameof(s)); }
-        if (t == null) { throw new ArgumentNullException(nameof(t)); }
+        {|FixAllInDocument:if|} (s == null)
+        {
+            throw new ArgumentNullException(nameof(s));
+        }
+
+        if (t == null)
+        {
+            throw new ArgumentNullException(nameof(t));
+        }
+
         _s = s;
         _t = t;
     }
 }",
-@"
-using System;
+@"using System;
 
 class C
 {
@@ -102,22 +120,28 @@ class C
         [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseThrowExpression)]
         public async Task FixAllInDocument4()
         {
-            await TestAsync(
-@"
-using System;
+            await TestInRegularAndScriptAsync(
+@"using System;
 
 class C
 {
     void M(string s, string t)
     {
-        if (s == null) { throw new ArgumentNullException(nameof(s)); }
-        {|FixAllInDocument:if|} (t == null) { throw new ArgumentNullException(nameof(t)); }
+        if (s == null)
+        {
+            throw new ArgumentNullException(nameof(s));
+        }
+
+        {|FixAllInDocument:if|} (t == null)
+        {
+            throw new ArgumentNullException(nameof(t));
+        }
+
         _s = s;
         _t = t;
     }
 }",
-@"
-using System;
+@"using System;
 
 class C
 {
@@ -132,10 +156,9 @@ class C
         [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseThrowExpression)]
         public async Task FixAllInDocumentDoNotTouchOtherDocuments()
         {
-            await TestAsync(
-@"
-<Workspace>
-    <Project Language=""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
+            await TestInRegularAndScriptAsync(
+@"<Workspace>
+    <Project Language = ""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
         <Document>
 using System;
 
@@ -143,7 +166,11 @@ class C
 {
     void M(string s, string t)
     {
-        if (s == null) { {|FixAllInDocument:throw|} new ArgumentNullException(nameof(s)); }
+        if (s == null)
+        {
+            {|FixAllInDocument:throw|} new ArgumentNullException(nameof(s));
+        }
+
         _s = s;
     }
 }
@@ -155,17 +182,19 @@ class D
 {
     void M(string s, string t)
     {
-        if (s == null) { throw new ArgumentNullException(nameof(s)); }
+        if (s == null)
+        {
+            throw new ArgumentNullException(nameof(s));
+        }
+
         _s = s;
     }
 }
         </Document>
     </Project>
-</Workspace>
-",
-@"
-<Workspace>
-    <Project Language=""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
+</Workspace>",
+@"<Workspace>
+    <Project Language = ""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
         <Document>
 using System;
 
@@ -184,7 +213,11 @@ class D
 {
     void M(string s, string t)
     {
-        if (s == null) { throw new ArgumentNullException(nameof(s)); }
+        if (s == null)
+        {
+            throw new ArgumentNullException(nameof(s));
+        }
+
         _s = s;
     }
 }
@@ -196,10 +229,9 @@ class D
         [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsUseThrowExpression)]
         public async Task FixAllInProject1()
         {
-            await TestAsync(
-@"
-<Workspace>
-    <Project Language=""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
+            await TestInRegularAndScriptAsync(
+@"<Workspace>
+    <Project Language = ""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
         <Document>
 using System;
 
@@ -207,7 +239,11 @@ class C
 {
     void M(string s, string t)
     {
-        if (s == null) { {|FixAllInProject:throw|} new ArgumentNullException(nameof(s)); }
+        if (s == null)
+        {
+            {|FixAllInProject:throw|} new ArgumentNullException(nameof(s));
+        }
+
         _s = s;
     }
 }
@@ -219,17 +255,19 @@ class D
 {
     void M(string s, string t)
     {
-        if (s == null) { throw new ArgumentNullException(nameof(s)); }
+        if (s == null)
+        {
+            throw new ArgumentNullException(nameof(s));
+        }
+
         _s = s;
     }
 }
         </Document>
     </Project>
-</Workspace>
-",
-@"
-<Workspace>
-    <Project Language=""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
+</Workspace>",
+@"<Workspace>
+    <Project Language = ""C#"" AssemblyName=""Assembly1"" CommonReferences=""true"">
         <Document>
 using System;
 

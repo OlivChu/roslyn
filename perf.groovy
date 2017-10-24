@@ -14,16 +14,14 @@ def generate(boolean isPr) {
     def myJob = job(jobName) {
         description('perf run')
 
-        steps {
-            batchFile("""powershell -File ./build/scripts/run_perf.ps1""")
+        wrappers {
+            credentialsBinding {
+                string('BV_UPLOAD_SAS_TOKEN', 'Roslyn Perf BenchView Sas')
+            }
         }
 
-        publishers {
-            postBuildScripts {
-                steps {
-                    batchFile("""powershell -File ./build/scripts/cleanup_perf.ps1 -ShouldArchive""")
-                }
-            }
+        steps {
+            batchFile("""powershell -File ./build/scripts/run_perf.ps1""")
         }
     }
 
@@ -32,15 +30,13 @@ def generate(boolean isPr) {
     Utilities.addArchival(myJob, archiveSettings)
     Utilities.standardJobSetup(myJob, projectName, isPr, defaultBranch)
     Utilities.setMachineAffinity(myJob, 'Windows_NT', 'latest-or-auto-perf')
-    Utilities.addGithubPushTrigger(myJob)
 
     if (isPr) {
-        // Utilities.addGithubPRTriggerForBranch(newJob, branch, "Windows ${configuration}")
         TriggerBuilder prTrigger = TriggerBuilder.triggerOnPullRequest()
         prTrigger.permitOrg('Microsoft')
         prTrigger.permitOrg('dotnet')
-        prTrigger.setCustomTriggerPhrase("(?i).*test\\W+perf.*" )
-        prTrigger.triggerForBranch('master');
+        prTrigger.setCustomTriggerPhrase("(?im)^\\s*(@dotnet-bot\\s+)?(re)?test\\s+perf(\\s+please)?\\s*\$" )
+        prTrigger.triggerForBranch(branchName);
         prTrigger.setGithubContext('Performance Test Run')
         prTrigger.emitTrigger(myJob)
     }

@@ -2,6 +2,7 @@
 
 using System.Collections.Immutable;
 using System.Threading;
+using Microsoft.CodeAnalysis.PooledObjects;
 
 namespace Microsoft.CodeAnalysis.Structure
 {
@@ -10,13 +11,13 @@ namespace Microsoft.CodeAnalysis.Structure
         public abstract void CollectBlockSpans(
             Document document,
             SyntaxNode node,
-            ImmutableArray<BlockSpan>.Builder spans,
+            ArrayBuilder<BlockSpan> spans,
             CancellationToken cancellationToken);
 
         public abstract void CollectBlockSpans(
             Document document,
             SyntaxTrivia trivia,
-            ImmutableArray<BlockSpan>.Builder spans,
+            ArrayBuilder<BlockSpan> spans,
             CancellationToken cancellationToken);
     }
 }

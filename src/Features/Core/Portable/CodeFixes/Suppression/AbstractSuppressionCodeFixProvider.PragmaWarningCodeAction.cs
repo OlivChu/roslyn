@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Threading;
 using System.Threading.Tasks;
@@ -16,10 +16,10 @@ namespace Microsoft.CodeAnalysis.CodeFixes.Suppression
             private readonly bool _forFixMultipleContext;
 
             public static PragmaWarningCodeAction Create(
-                    SuppressionTargetInfo suppressionTargetInfo,
-                    Document document,
-                    Diagnostic diagnostic,
-                    AbstractSuppressionCodeFixProvider fixer)
+                SuppressionTargetInfo suppressionTargetInfo,
+                Document document,
+                Diagnostic diagnostic,
+                AbstractSuppressionCodeFixProvider fixer)
             {
                 // We need to normalize the leading trivia on start token to account for
                 // the trailing trivia on its previous token (and similarly normalize trailing trivia for end token).

@@ -1,10 +1,12 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Roslyn.Utilities;
 using System;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using Microsoft.CodeAnalysis.Semantics;
 
 namespace Microsoft.CodeAnalysis.CSharp
 {
@@ -67,6 +69,18 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
+        private class DeconstructionUncommonData : UncommonData
+        {
+            internal DeconstructionUncommonData(DeconstructionInfo deconstructionInfoOpt, ImmutableArray<Conversion> nestedConversions)
+                : base(false, false, default(UserDefinedConversionResult), null, nestedConversions)
+            {
+                Debug.Assert(!nestedConversions.IsDefaultOrEmpty);
+                DeconstructionInfo = deconstructionInfoOpt;
+            }
+
+            readonly internal DeconstructionInfo DeconstructionInfo;
+        }
+
         private Conversion(
             ConversionKind kind,
             UncommonData uncommonData)
@@ -117,6 +131,14 @@ namespace Microsoft.CodeAnalysis.CSharp
                 nestedConversions: nestedConversions);
         }
 
+        internal Conversion(ConversionKind kind, DeconstructionInfo deconstructionInfo, ImmutableArray<Conversion> nestedConversions)
+        {
+            Debug.Assert(kind == ConversionKind.Deconstruction);
+
+            this._kind = kind;
+            _uncommonData = new DeconstructionUncommonData(deconstructionInfo, nestedConversions);
+        }
+
         internal Conversion SetConversionMethod(MethodSymbol conversionMethod)
         {
             // we use this method to patch up the conversion method only in two cases - 
@@ -159,7 +181,7 @@ namespace Microsoft.CodeAnalysis.CSharp
                 case ConversionKind.ImplicitThrow:
                 case ConversionKind.AnonymousFunction: 
                 case ConversionKind.Boxing: 
-                case ConversionKind.NullLiteral: 
+                case ConversionKind.DefaultOrNullLiteral: 
                 case ConversionKind.NullToPointer: 
                 case ConversionKind.PointerToVoid: 
                 case ConversionKind.PointerToPointer: 
@@ -199,7 +221,7 @@ namespace Microsoft.CodeAnalysis.CSharp
         internal static Conversion ImplicitThrow => new Conversion(ConversionKind.ImplicitThrow);
         internal static Conversion AnonymousFunction => new Conversion(ConversionKind.AnonymousFunction);
         internal static Conversion Boxing => new Conversion(ConversionKind.Boxing);
-        internal static Conversion NullLiteral => new Conversion(ConversionKind.NullLiteral);
+        internal static Conversion DefaultOrNullLiteral => new Conversion(ConversionKind.DefaultOrNullLiteral);
         internal static Conversion NullToPointer => new Conversion(ConversionKind.NullToPointer);
         internal static Conversion PointerToVoid => new Conversion(ConversionKind.PointerToVoid);
         internal static Conversion PointerToPointer => new Conversion(ConversionKind.PointerToPointer);
@@ -213,6 +235,9 @@ namespace Microsoft.CodeAnalysis.CSharp
         internal static Conversion ImplicitDynamic => new Conversion(ConversionKind.ImplicitDynamic);
         internal static Conversion ExplicitDynamic => new Conversion(ConversionKind.ExplicitDynamic);
         internal static Conversion InterpolatedString => new Conversion(ConversionKind.InterpolatedString);
+        internal static Conversion Deconstruction => new Conversion(ConversionKind.Deconstruction);
+        internal static Conversion IdentityValue => new Conversion(ConversionKind.IdentityValue);
+        internal static Conversion PinnedObjectToPointer => new Conversion(ConversionKind.PinnedObjectToPointer);
 
         // trivial conversions that could be underlying in nullable conversion
         // NOTE: tuple conversions can be underlying as well, but they are not trivial 
@@ -235,6 +260,15 @@ namespace Microsoft.CodeAnalysis.CSharp
             internal static ImmutableArray<Conversion> PointerToIntegerUnderlying = ImmutableArray.Create(PointerToInteger);
         }
 
+        internal static Conversion MakeStackAllocToPointerType(Conversion underlyingConversion)
+        {
+            return new Conversion(ConversionKind.StackAllocToPointerType, ImmutableArray.Create(underlyingConversion));
+        }
+
+        internal static Conversion MakeStackAllocToSpanType(Conversion underlyingConversion)
+        {
+            return new Conversion(ConversionKind.StackAllocToSpanType, ImmutableArray.Create(underlyingConversion));
+        }
 
         internal static Conversion MakeNullableConversion(ConversionKind kind, Conversion nestedConversion)
         {
@@ -325,6 +359,15 @@ namespace Microsoft.CodeAnalysis.CSharp
             }
         }
 
+        internal DeconstructionInfo DeconstructionInfo
+        {
+            get
+            {
+                var uncommonData = (DeconstructionUncommonData)_uncommonData;
+                return uncommonData == null ? default(DeconstructionInfo) : uncommonData.DeconstructionInfo;
+            }
+        }
+
         // CONSIDER: public?
         internal bool IsValid
         {
@@ -412,6 +455,17 @@ namespace Microsoft.CodeAnalysis.CSharp
             get
             {
                 return Kind == ConversionKind.Identity;
+            }
+        }
+
+        /// <summary>
+        /// Returns true if the conversion is a stackalloc conversion.
+        /// </summary>
+        public bool IsStackAlloc
+        {
+            get
+            {
+                return Kind == ConversionKind.StackAllocToPointerType || Kind == ConversionKind.StackAllocToSpanType;
             }
         }
 
@@ -562,16 +616,16 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
 
         /// <summary>
-        /// Returns true if the conversion is an implicit null literal conversion.
+        /// Returns true if the conversion is an implicit null or default literal conversion.
         /// </summary>
         /// <remarks>
-        /// Null literal conversions are described in section 6.1.5 of the C# language specification.
+        /// Null or default literal conversions are described in section 6.1.5 of the C# language specification.
         /// </remarks>
         public bool IsNullLiteral
         {
             get
             {
-                return Kind == ConversionKind.NullLiteral;
+                return Kind == ConversionKind.DefaultOrNullLiteral;
             }
         }
 
@@ -811,6 +865,21 @@ namespace Microsoft.CodeAnalysis.CSharp
         }
 
         /// <summary>
+        /// Creates a <seealso cref="CommonConversion"/> from this C# conversion.
+        /// </summary>
+        /// <returns>The <see cref="CommonConversion"/> that represents this conversion.</returns>
+        /// <remarks>
+        /// This is a lossy conversion; it is not possible to recover the original <see cref="Conversion"/>
+        /// from the <see cref="CommonConversion"/> struct.
+        /// </remarks>
+        public CommonConversion ToCommonConversion()
+        {
+            // The MethodSymbol of CommonConversion only refers to UserDefined conversions, not method groups
+            var methodSymbol = IsUserDefined ? MethodSymbol : null;
+            return new CommonConversion(Exists, IsIdentity, IsNumeric, IsReference, methodSymbol);
+        }
+
+        /// <summary>
         /// Returns a string that represents the <see cref="Kind"/> of the conversion.
         /// </summary>
         /// <returns>A string that represents the <see cref="Kind"/> of the conversion.</returns>
@@ -869,5 +938,52 @@ namespace Microsoft.CodeAnalysis.CSharp
         {
             return !(left == right);
         }
+
+#if DEBUG
+        internal string Dump()
+        {
+            return TreeDumper.DumpCompact(Dump(this));
+
+            TreeDumperNode Dump(Conversion self)
+            {
+                var sub = new System.Collections.Generic.List<TreeDumperNode>();
+
+                if ((object)self.Method != null)
+                {
+                    sub.Add(new TreeDumperNode("method", self.Method.ToDisplayString(), null));
+                }
+
+                if ((object)self.DeconstructionInfo != null)
+                {
+                    sub.Add(new TreeDumperNode("deconstructionInfo", null,
+                        new[] { BoundTreeDumperNodeProducer.MakeTree(self.DeconstructionInfo.Invocation)}));
+                }
+
+                var underlyingConversions = self.UnderlyingConversions;
+                if (!underlyingConversions.IsDefaultOrEmpty)
+                {
+                    sub.Add(new TreeDumperNode($"underlyingConversions[{underlyingConversions.Length}]", null,
+                        underlyingConversions.SelectAsArray(c => Dump(c))));
+                }
+
+                return new TreeDumperNode("conversion", self.Kind, sub);
+            }
+        }
+#endif
+    }
+
+    /// <summary>Stores all the information from binding for calling a Deconstruct method.</summary>
+    internal struct DeconstructionInfo
+    {
+        internal DeconstructionInfo(BoundExpression invocation, BoundDeconstructValuePlaceholder inputPlaceholder,
+            ImmutableArray<BoundDeconstructValuePlaceholder> outputPlaceholders)
+        {
+             (Invocation, InputPlaceholder, OutputPlaceholders) = (invocation, inputPlaceholder, outputPlaceholders);
+        }
+
+        readonly internal BoundExpression Invocation;
+        readonly internal BoundDeconstructValuePlaceholder InputPlaceholder;
+        readonly internal ImmutableArray<BoundDeconstructValuePlaceholder> OutputPlaceholders;
+        internal bool IsDefault => (object)Invocation == null;
     }
 }

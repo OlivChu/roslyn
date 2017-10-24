@@ -15,11 +15,6 @@ namespace Microsoft.CodeAnalysis
                 visitor.WriteSymbolKey(symbol.ContainingSymbol);
             }
 
-            public static int GetHashCode(GetHashCodeReader reader)
-            {
-                return Hash.Combine(reader.ReadString(), reader.ReadSymbolKey());
-            }
-
             public static SymbolKeyResolution Resolve(SymbolKeyReader reader)
             {
                 var metadataName = reader.ReadString();
@@ -28,13 +23,13 @@ namespace Microsoft.CodeAnalysis
                 var result = containingSymbolResolution.GetAllSymbols()
                     .SelectMany(s =>
                     {
-                        if (s is INamedTypeSymbol)
+                        if (s is INamedTypeSymbol namedType)
                         {
-                            return ((INamedTypeSymbol)s).TypeParameters.Where(p => p.MetadataName == metadataName);
+                            return namedType.TypeParameters.Where(p => p.MetadataName == metadataName);
                         }
-                        else if (s is IMethodSymbol)
+                        else if (s is IMethodSymbol method)
                         {
-                            return ((IMethodSymbol)s).TypeParameters.Where(p => p.MetadataName == metadataName);
+                            return method.TypeParameters.Where(p => p.MetadataName == metadataName);
                         }
                         else
                         {

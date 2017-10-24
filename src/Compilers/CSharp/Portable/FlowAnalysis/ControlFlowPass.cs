@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Linq;
 using Microsoft.CodeAnalysis.Collections;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
+using Microsoft.CodeAnalysis.PooledObjects;
 
 namespace Microsoft.CodeAnalysis.CSharp
 {
@@ -330,10 +331,6 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         public override BoundNode VisitPatternSwitchStatement(BoundPatternSwitchStatement node)
         {
-            // The pattern switch statement has computed a state machine, and gathered diagnostics
-            // related to subsumption. We report those here.
-            Diagnostics.AddRange(node.DecisionTreeDiagnostics);
-
             return base.VisitPatternSwitchStatement(node);
         }
 

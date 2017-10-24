@@ -7,7 +7,6 @@ using Microsoft.CodeAnalysis.Editor.Host;
 using Microsoft.CodeAnalysis.Editor.Shared.Extensions;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Formatting.Rules;
-using Microsoft.CodeAnalysis.Host;
 using Microsoft.CodeAnalysis.Shared.Extensions;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.VisualStudio.TextManager.Interop;
@@ -84,13 +83,13 @@ namespace Microsoft.VisualStudio.LanguageServices.Implementation.LanguageService
             // adjust the indentation if there is a token right at the spans we start at.
             // Instead, we make sure we include preceding indentation.
             var prevToken = root.FindToken(start).GetPreviousToken();
-            if (prevToken != default(SyntaxToken))
+            if (prevToken != default)
             {
                 start = prevToken.Span.Start;
             }
 
             var nextToken = root.FindTokenFromEnd(end).GetNextToken();
-            if (nextToken != default(SyntaxToken))
+            if (nextToken != default)
             {
                 end = nextToken.Span.End;
             }

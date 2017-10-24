@@ -10,6 +10,7 @@ Imports System.Linq
 Imports System.Runtime.InteropServices
 Imports System.Threading
 Imports Microsoft.CodeAnalysis.CodeGen
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
@@ -80,7 +81,9 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Symbols.Metadata.PE
 
         Private _lazyMightContainExtensionMethods As Byte = ThreeState.Unknown
 
-        Private _lazyHasEmbeddedAttribute As Integer = ThreeState.Unknown
+        Private _lazyHasCodeAnalysisEmbeddedAttribute As Integer = ThreeState.Unknown
+
+        Private _lazyHasVisualBasicEmbeddedAttribute As Integer = ThreeState.Unknown
 
         Private _lazyObsoleteAttributeData As ObsoleteAttributeData = ObsoleteAttributeData.Uninitialized
 
@@ -273,7 +276,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Symbols.Metadata.PE
                     Dim interfaceHandle As EntityHandle = moduleSymbol.Module.MetadataReader.GetInterfaceImplementation(interfaceImpl).Interface
                     Dim typeSymbol As TypeSymbol = tokenDecoder.GetTypeOfToken(interfaceHandle)
 
-                    typeSymbol = DirectCast(TupleTypeDecoder.DecodeTupleTypesIfApplicable(typeSymbol, interfaceHandle, moduleSymbol), NamedTypeSymbol)
+                    typeSymbol = DirectCast(TupleTypeDecoder.DecodeTupleTypesIfApplicable(typeSymbol, interfaceImpl, moduleSymbol), NamedTypeSymbol)
 
                     'TODO: how to pass reason to unsupported
                     Dim namedTypeSymbol As NamedTypeSymbol = TryCast(typeSymbol, NamedTypeSymbol)
@@ -933,15 +936,27 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Symbols.Metadata.PE
             End Get
         End Property
 
-        Friend Overrides ReadOnly Property HasEmbeddedAttribute As Boolean
+        Friend Overrides ReadOnly Property HasCodeAnalysisEmbeddedAttribute As Boolean
             Get
-                If Me._lazyHasEmbeddedAttribute = ThreeState.Unknown Then
-                    Interlocked.CompareExchange(Me._lazyHasEmbeddedAttribute,
-                                                If(Me.ContainingPEModule.Module.HasVisualBasicEmbeddedAttribute(Me._handle),
-                                                   ThreeState.True, ThreeState.False),
-                                                ThreeState.Unknown)
+                If Me._lazyHasCodeAnalysisEmbeddedAttribute = ThreeState.Unknown Then
+                    Interlocked.CompareExchange(
+                        Me._lazyHasCodeAnalysisEmbeddedAttribute,
+                        Me.ContainingPEModule.Module.HasCodeAnalysisEmbeddedAttribute(Me._handle).ToThreeState(),
+                        ThreeState.Unknown)
                 End If
-                Return Me._lazyHasEmbeddedAttribute = ThreeState.True
+                Return Me._lazyHasCodeAnalysisEmbeddedAttribute = ThreeState.True
+            End Get
+        End Property
+
+        Friend Overrides ReadOnly Property HasVisualBasicEmbeddedAttribute As Boolean
+            Get
+                If Me._lazyHasVisualBasicEmbeddedAttribute = ThreeState.Unknown Then
+                    Interlocked.CompareExchange(
+                        Me._lazyHasVisualBasicEmbeddedAttribute,
+                        Me.ContainingPEModule.Module.HasVisualBasicEmbeddedAttribute(Me._handle).ToThreeState(),
+                        ThreeState.Unknown)
+                End If
+                Return Me._lazyHasVisualBasicEmbeddedAttribute = ThreeState.True
             End Get
         End Property
 
@@ -1202,7 +1217,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Symbols.Metadata.PE
                         Dim setMethod = GetAccessorMethod(moduleSymbol, methodHandleToSymbol, methods.Setter)
 
                         If (getMethod IsNot Nothing) OrElse (setMethod IsNot Nothing) Then
-                            members.Add(New PEPropertySymbol(moduleSymbol, Me, propertyDef, getMethod, setMethod))
+                            members.Add(PEPropertySymbol.Create(moduleSymbol, Me, propertyDef, getMethod, setMethod))
                         End If
                     Catch mrEx As BadImageFormatException
                     End Try
@@ -1265,6 +1280,30 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Symbols.Metadata.PE
                 ' If so mark the type as bad, because it relies upon semantics that are not understood by the VB compiler.
                 If Me.ContainingPEModule.Module.HasRequiredAttributeAttribute(Me.Handle) Then
                     Return ErrorFactory.ErrorInfo(ERRID.ERR_UnsupportedType1, Me)
+                End If
+
+                Dim typeKind = Me.TypeKind
+                Dim specialtype = Me.SpecialType
+                If (typeKind = TypeKind.Class OrElse typeKind = TypeKind.Module) AndAlso
+                   specialtype <> SpecialType.System_Enum AndAlso specialtype <> SpecialType.System_MulticastDelegate Then
+                    Dim base As TypeSymbol = GetDeclaredBase(Nothing)
+
+                    If base?.SpecialType = SpecialType.None AndAlso base.ContainingAssembly?.IsMissing Then
+                        Dim missingType = TryCast(base, MissingMetadataTypeSymbol.TopLevel)
+
+                        If missingType IsNot Nothing AndAlso missingType.Arity = 0 Then
+                            Dim emittedName As String = MetadataHelpers.BuildQualifiedName(missingType.NamespaceName, missingType.MetadataName)
+
+                            Select Case SpecialTypes.GetTypeFromMetadataName(emittedName)
+                                Case SpecialType.System_Enum,
+                                     SpecialType.System_Delegate,
+                                     SpecialType.System_MulticastDelegate,
+                                     SpecialType.System_ValueType
+                                    ' This might be a structure, an enum, or a delegate
+                                    Return missingType.GetUseSiteErrorInfo()
+                            End Select
+                        End If
+                    End If
                 End If
 
                 ' Verify type parameters for containing types
@@ -1475,6 +1514,9 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Symbols.Metadata.PE
             Next
         End Function
 
+        Friend NotOverridable Overrides Function GetSynthesizedWithEventsOverrides() As IEnumerable(Of PropertySymbol)
+            Return SpecializedCollections.EmptyEnumerable(Of PropertySymbol)()
+        End Function
     End Class
 
 End Namespace

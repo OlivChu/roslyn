@@ -32,16 +32,6 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         private HashSet<Symbol> _variablesDeclared = new HashSet<Symbol>();
 
-        private void Analyze()
-        {
-            // only one pass needed.
-            regionPlace = RegionPlace.Before;
-            bool badRegion = false;
-            SetState(ReachableState());
-            Scan(ref badRegion);
-            if (badRegion) _variablesDeclared.Clear();
-        }
-
         internal VariablesDeclaredWalker(CSharpCompilation compilation, Symbol member, BoundNode node, BoundNode firstInRegion, BoundNode lastInRegion)
             : base(compilation, member, node, firstInRegion, lastInRegion)
         {
@@ -77,7 +67,13 @@ namespace Microsoft.CodeAnalysis.CSharp
             if (IsInside && pattern.Kind == BoundKind.DeclarationPattern)
             {
                 var decl = (BoundDeclarationPattern)pattern;
-                _variablesDeclared.Add(decl.LocalSymbol);
+                // The variable may be null if it is a discard designation `_`.
+                if (decl.Variable?.Kind == SymbolKind.Local)
+                {
+                    // Because this API only returns local symbols and parameters,
+                    // we exclude pattern variables that have become fields in scripts.
+                    _variablesDeclared.Add(decl.Variable);
+                }
             }
         }
 
@@ -117,16 +113,23 @@ namespace Microsoft.CodeAnalysis.CSharp
             return base.VisitLocalFunctionStatement(node);
         }
 
-        public override BoundNode VisitForEachStatement(BoundForEachStatement node)
+        public override void VisitForEachIterationVariables(BoundForEachStatement node)
         {
             if (IsInside)
             {
-                _variablesDeclared.Add(node.IterationVariableOpt);
+                var deconstructionAssignment = node.DeconstructionOpt?.DeconstructionAssignment;
+
+                if (deconstructionAssignment == null)
+                {
+                    _variablesDeclared.AddAll(node.IterationVariables);
+                }
+                else
+                {
+                    // Deconstruction foreach declares multiple variables.
+                    ((BoundTupleExpression)deconstructionAssignment.Left).VisitAllElements((x, self) => self.Visit(x), this);
+                }
             }
-
-            return base.VisitForEachStatement(node);
         }
-
 
         protected override void VisitCatchBlock(BoundCatchBlock catchBlock, ref LocalState finallyState)
         {
@@ -158,24 +161,17 @@ namespace Microsoft.CodeAnalysis.CSharp
 
         protected override void VisitLvalue(BoundLocal node)
         {
-            CheckOutVarDeclaration(node);
-            base.VisitLvalue(node);
-        }
-
-        private void CheckOutVarDeclaration(BoundLocal node)
-        {
-            if (IsInside &&
-                !node.WasCompilerGenerated && node.Syntax.Kind() == SyntaxKind.DeclarationExpression &&
-                ((DeclarationExpressionSyntax)node.Syntax).Identifier() == node.LocalSymbol.IdentifierToken)
-            {
-                _variablesDeclared.Add(node.LocalSymbol);
-            }
+            VisitLocal(node);
         }
 
         public override BoundNode VisitLocal(BoundLocal node)
         {
-            CheckOutVarDeclaration(node);
-            return base.VisitLocal(node);
+            if (IsInside && node.IsDeclaration)
+            {
+                _variablesDeclared.Add(node.LocalSymbol);
+            }
+
+            return null;
         }
     }
 }

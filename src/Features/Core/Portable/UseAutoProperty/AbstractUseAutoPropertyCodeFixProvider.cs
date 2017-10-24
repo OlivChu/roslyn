@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Editing;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
@@ -28,8 +29,8 @@ namespace Microsoft.CodeAnalysis.UseAutoProperty
     {
         protected static SyntaxAnnotation SpecializedFormattingAnnotation = new SyntaxAnnotation();
 
-        public sealed override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(
-            AbstractUseAutoPropertyAnalyzer<TPropertyDeclaration, TFieldDeclaration, TVariableDeclarator, TExpression>.UseAutoProperty);
+        public sealed override ImmutableArray<string> FixableDiagnosticIds 
+            => ImmutableArray.Create(IDEDiagnosticIds.UseAutoPropertyDiagnosticId);
 
         public sealed override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -45,7 +46,7 @@ namespace Microsoft.CodeAnalysis.UseAutoProperty
         {
             foreach (var diagnostic in context.Diagnostics)
             {
-                var equivalenceKey = diagnostic.Properties["SymbolEquivalenceKey"];
+                var equivalenceKey = diagnostic.Properties[Constants.SymbolEquivalenceKey];
 
                 context.RegisterCodeFix(
                     new UseAutoPropertyCodeAction(
@@ -220,8 +221,7 @@ namespace Microsoft.CodeAnalysis.UseAutoProperty
 
             foreach (var symbol in symbols)
             {
-                var otherProperty = symbol as IPropertySymbol;
-                if (otherProperty != null)
+                if (symbol is IPropertySymbol otherProperty)
                 {
                     var mappedProperty = otherProperty.GetSymbolKey().Resolve(compilation, cancellationToken: cancellationToken).Symbol as IPropertySymbol;
                     if (property.Equals(mappedProperty))

@@ -18,15 +18,6 @@ namespace Microsoft.CodeAnalysis
                 visitor.WriteParameterTypesArray(symbol.OriginalDefinition.Parameters);
             }
 
-            public static int GetHashCode(GetHashCodeReader reader)
-            {
-                return Hash.Combine(reader.ReadString(),
-                       Hash.Combine(reader.ReadSymbolKey(),
-                       Hash.Combine(reader.ReadBoolean(),
-                       Hash.Combine(reader.ReadRefKindArrayHashCode(),
-                                    reader.ReadSymbolKeyArrayHashCode()))));
-            }
-
             public static SymbolKeyResolution Resolve(SymbolKeyReader reader)
             {
                 var metadataName = reader.ReadString();
@@ -38,7 +29,7 @@ namespace Microsoft.CodeAnalysis
 
                 if (originalParameterTypes.Any(s_typeIsNull))
                 {
-                    return default(SymbolKeyResolution);
+                    return default;
                 }
 
                 var properties = containingSymbolResolution.GetAllSymbols().OfType<INamedTypeSymbol>()

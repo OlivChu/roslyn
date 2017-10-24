@@ -26,7 +26,7 @@ namespace Microsoft.CodeAnalysis
                     return UpdateDocumentInCompilationAsync(oldCompilation, _oldState, _newState, cancellationToken);
                 }
 
-                public DocumentId DocumentId { get { return _newState.Info.Id; } }
+                public DocumentId DocumentId => _newState.Info.Id;
             }
 
             private class RemoveAllDocumentsAction : CompilationTranslationAction
@@ -62,7 +62,7 @@ namespace Microsoft.CodeAnalysis
             private class ProjectParseOptionsAction : SimpleCompilationTranslationAction<ProjectState>
             {
                 private static readonly Func<Compilation, ProjectState, CancellationToken, Task<Compilation>> s_action =
-                    (o, d, c) => Task.Run(async () => await ReplaceSyntaxTreesWithTreesFromNewProjectStateAsync(o, d, c).ConfigureAwait(false), c);
+                    (o, d, c) => Task.Run(() => ReplaceSyntaxTreesWithTreesFromNewProjectStateAsync(o, d, c), c);
 
                 public ProjectParseOptionsAction(ProjectState state)
                     : base(state, s_action)

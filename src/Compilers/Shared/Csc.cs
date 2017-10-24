@@ -3,9 +3,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using Roslyn.Utilities;
 using Microsoft.CodeAnalysis.CommandLine;
 
 namespace Microsoft.CodeAnalysis.CSharp.CommandLine
@@ -13,7 +10,7 @@ namespace Microsoft.CodeAnalysis.CSharp.CommandLine
     internal sealed class Csc : CSharpCompiler
     {
         internal Csc(string responseFile, BuildPaths buildPaths, string[] args, IAnalyzerAssemblyLoader analyzerLoader)
-            : base(CSharpCommandLineParser.Default, responseFile, args, buildPaths.ClientDirectory, buildPaths.WorkingDirectory, buildPaths.SdkDirectory, Environment.GetEnvironmentVariable("LIB"), analyzerLoader)
+            : base(CSharpCommandLineParser.Default, responseFile, args, buildPaths, Environment.GetEnvironmentVariable("LIB"), analyzerLoader)
         {
         }
 

@@ -380,16 +380,25 @@ ToString]]>.Value)
 
     <Fact>
     Public Sub ParseTuple4()
-        Dim expr = ParseExpression("(A:=1)", expectsErrors:=False)
+        Dim expr = ParseExpression("(A:=1)", expectsErrors:=True)
         Assert.Equal(SyntaxKind.TupleExpression, expr.Kind)
+        Assert.Equal(SyntaxKind.SimpleArgument, expr.ChildNodesAndTokens()(1).Kind())
+        Assert.Equal(SyntaxKind.NameColonEquals, expr.ChildNodesAndTokens()(1).ChildNodesAndTokens()(0).Kind())
+        Dim missingComma = expr.ChildNodesAndTokens()(2)
+        Assert.Equal(SyntaxKind.CommaToken, missingComma.Kind())
+        Assert.Equal(True, missingComma.IsMissing)
+        Dim missingArg = expr.ChildNodesAndTokens()(3)
+        Assert.Equal(SyntaxKind.SimpleArgument, missingArg.Kind())
+        Assert.Equal(True, missingArg.IsMissing)
+
         expr = ParseExpression("(A:=, C).C", expectsErrors:=True)
         Assert.Equal(SyntaxKind.TupleExpression, expr.ChildNodesAndTokens()(0).Kind())
         Assert.Equal(SyntaxKind.SimpleArgument, expr.ChildNodesAndTokens()(0).ChildNodesAndTokens()(1).Kind())
         Assert.Equal(SyntaxKind.NameColonEquals, expr.ChildNodesAndTokens()(0).ChildNodesAndTokens()(1).ChildNodesAndTokens()(0).Kind())
 
-        Dim missingArg = expr.ChildNodesAndTokens()(0).ChildNodesAndTokens()(1).ChildNodesAndTokens()(1)
-        Assert.Equal(SyntaxKind.IdentifierName, missingArg.Kind)
-        Assert.Equal(True, missingArg.IsMissing)
+        Dim missingArg2 = expr.ChildNodesAndTokens()(0).ChildNodesAndTokens()(1).ChildNodesAndTokens()(1)
+        Assert.Equal(SyntaxKind.IdentifierName, missingArg2.Kind)
+        Assert.Equal(True, missingArg2.IsMissing)
     End Sub
 
     <Fact>
@@ -424,12 +433,35 @@ ToString]]>.Value)
 
         expr = ParseExpression("New Moo() From{1,2,3}")
         Assert.Equal(SyntaxKind.ObjectCreationExpression, expr.Kind)
+    End Sub
 
-        expr = ParseExpression("New (A, B)")
-        Assert.Equal(SyntaxKind.ObjectCreationExpression, expr.Kind)
+    <Fact>
+    Public Sub ParseNewTuple()
+        ParseAndVerify(<![CDATA[
+            Module Module1
+                Sub Main()
+                    Dim x = New (A, B)
+                    Dim y = New (A, B)()
+                    Dim y = New (A As Integer, B$)
+                End Sub
+            End Module
+        ]]>)
 
-        expr = ParseExpression("New (A as Integer, B as integer)(1, 2)")
-        Assert.Equal(SyntaxKind.ObjectCreationExpression, expr.Kind)
+        ParseAndVerify(<![CDATA[
+            Module Module1
+                Sub Main()
+                    Dim x As New (A, B)
+                    Dim y As New (A, B)()
+                    Dim y As New (A As Integer, B$)
+                End Sub
+
+                Public Function Bar() As (Alice As (Alice As Integer, Bob As Integer)(), Bob As Integer)
+                    ' this is actually ok, since it is an array
+                    Return (New(Integer, Integer)() {(4, 5)}, 5)
+                End Function
+            End Module
+        ]]>)
+
     End Sub
 
     <Fact>
@@ -1401,7 +1433,7 @@ Skip 2
         ParseAndVerify(<![CDATA[
             module BBB
 
-                Sub Foo
+                Sub Goo
                     if True
                         dim x=Sub()
 
@@ -1420,7 +1452,7 @@ Skip 2
         ParseAndVerify(<![CDATA[
             module BBB
 
-                Sub Foo
+                Sub Goo
                     if True
                         dim x=Sub()
                             With new Object()
@@ -1441,7 +1473,7 @@ Skip 2
         ParseAndVerify(<![CDATA[
             module BBB
 
-                Sub Foo
+                Sub Goo
                         dim x=Function()
                             With new Object()
                 end Sub
@@ -1459,7 +1491,7 @@ Skip 2
         ParseAndVerify(<![CDATA[
             module BBB
 
-                Sub Foo
+                Sub Goo
                         dim x=Sub() if true then while true : Dim z=Function()
 
                                                               End Function : end while
@@ -1473,7 +1505,7 @@ Skip 2
         ParseAndVerify(<![CDATA[
             module BBB
 
-                Sub Foo
+                Sub Goo
                         dim x=Sub() if true then while true : Dim z=Function()
 
                                                               End Function : end while
@@ -1489,7 +1521,7 @@ Skip 2
         ParseAndVerify(<![CDATA[
             module BBB
 
-                Sub Foo
+                Sub Goo
                         dim x=Sub() if true then while true : Dim z=Function()
                                                                 end while
                                                               End Function : end while
@@ -1523,7 +1555,7 @@ Skip 2
     Public Sub ParseBadlyTerminateLambdaScenario8()
         ParseAndVerify(<![CDATA[
             module BBB
-                friend e = Foo(Function()
+                friend e = Goo(Function()
                                 if true then
                                     dim x=Sub() Call Sub()
                                                     end if
@@ -1556,7 +1588,7 @@ Skip 2
     Public Sub ParseBadlyTerminateLambdaScenario10()
         ParseAndVerify(<![CDATA[
             module BBB
-                Sub Foo()
+                Sub Goo()
                   Dim x  = Function()
                 End Sub
             end module
@@ -1570,7 +1602,7 @@ Skip 2
     <Fact>
     Public Sub ParseBadlyTerminateLambdaScenario11()
         ParseAndVerify(<![CDATA[
-            Module foo    
+            Module goo    
                 sub main     
                     Dim x = function         
                 End sub    
@@ -1587,7 +1619,7 @@ Skip 2
     Public Sub ParseSingleLineLambdaWithSingleLineIf()
         ParseAndVerify(<![CDATA[
             module m1
-                Sub Foo
+                Sub Goo
                         dim x=Sub() if true then console.writeline
                 end sub
             end module
@@ -1598,7 +1630,7 @@ Skip 2
     Public Sub ParseSingleLineLambdaWithMultipleStatements()
         ParseAndVerify(<![CDATA[
             module m1
-                Sub Foo
+                Sub Goo
                         dim x=Sub() console.writeline : console.writeline : end sub
                 end sub
             end module
@@ -1613,7 +1645,7 @@ Skip 2
     Public Sub ParseSingleLineLambdaEndingWithColon()
         ParseAndVerify(<![CDATA[
             module m1
-                Sub Foo
+                Sub Goo
                         dim x=Sub() console.writeline : console() :
                 end sub
             end module
@@ -1628,7 +1660,7 @@ Skip 2
     Public Sub ParseTryCastErrorExpectedRparen()
         ParseAndVerify(<![CDATA[
                 Module Module1
-                  Sub Foo()
+                  Sub Goo()
                    Dim o As Object
                    TryCast(o,Nothing)
                   End Sub
@@ -1676,13 +1708,16 @@ Skip 2
     <WorkItem(887861, "DevDiv/Personal")>
     <Fact>
     Public Sub ParseMoreErrorExpectedExpression30241()
-        ParseAndVerify(<![CDATA[
-                      <myattr2(1, "abc", prop:=42,true)> Class Scen15
-                      End Class
-            ]]>,
-            <errors>
-                <error id="30241"/>
-            </errors>)
+        Dim tree = Parse(<![CDATA[
+<myattr2(1, "abc", prop:=42,true)> Class Scen15
+End Class
+]]>, options:=TestOptions.Regular.WithLanguageVersion(LanguageVersion.VisualBasic15_3))
+
+        tree.AssertTheseDiagnostics(<errors><![CDATA[
+BC37303: Named argument expected.
+<myattr2(1, "abc", prop:=42,true)> Class Scen15
+                            ~
+                                    ]]></errors>)
     End Sub
 
     <WorkItem(887741, "DevDiv/Personal")>
@@ -1690,7 +1725,7 @@ Skip 2
     Public Sub ParseMoreErrorExpectedExpression()
         ParseAndVerify(<![CDATA[
                      Module Module1
-                        Sub Foo()
+                        Sub Goo()
                          Dim c = <></>
                         End Sub
                      End Module
@@ -1764,14 +1799,14 @@ class C1
     Public Sub ParseMethodInvocationWithMissingParens()
         ParseAndVerify(<![CDATA[
 class C1
-sub foo
-foo
+sub goo
+goo
 end sub
 End Class
 
 class c2
-sub foo
-foo 'comment
+sub goo
+goo 'comment
 end sub
 end class
 
@@ -1793,11 +1828,11 @@ end class
            Friend Module RegressDDB17220
     Sub RegressDDB17220()
 
-        Dim y = New With {Foo()}
+        Dim y = New With {Goo()}
 
     End Sub
 
-    Function foo() As String
+    Function goo() As String
         Return Nothing
     End Function
 End Module
@@ -1943,7 +1978,7 @@ Module Module1
     Sub Main()
         Dim x(9) As Integer
         x(0) = 1 : x(1) = 2 : x(2) = 3 : x(3) = 4 : x(4) = 5 : x(5) = 6 : x(6) = 7 : x(7) = 8 : x(8) = 9 : x(9) = 10
-        Dim q1 = Aggregate i In x Into foo = Sum(i)
+        Dim q1 = Aggregate i In x Into goo = Sum(i)
     End Sub
 End Module
             ]]>.Value

@@ -1,18 +1,17 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
-using Roslyn.Utilities;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
+using Roslyn.Utilities;
 using Microsoft.CodeAnalysis.CommandLine;
-using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 namespace Microsoft.CodeAnalysis.BuildTasks
 {
@@ -24,6 +23,13 @@ namespace Microsoft.CodeAnalysis.BuildTasks
     {
         private CancellationTokenSource _sharedCompileCts;
         internal readonly PropertyDictionary _store = new PropertyDictionary();
+
+        internal abstract RequestLanguage Language { get; }
+
+        static ManagedCompiler()
+        {
+            AssemblyResolution.Install();
+        }
 
         public ManagedCompiler()
         {
@@ -221,6 +227,13 @@ namespace Microsoft.CodeAnalysis.BuildTasks
             get { return (ITaskItem)_store[nameof(OutputAssembly)]; }
         }
 
+        [Output]
+        public ITaskItem OutputRefAssembly
+        {
+            set { _store[nameof(OutputRefAssembly)] = value; }
+            get { return (ITaskItem)_store[nameof(OutputRefAssembly)]; }
+        }
+
         public string Platform
         {
             set { _store[nameof(Platform)] = value; }
@@ -245,6 +258,12 @@ namespace Microsoft.CodeAnalysis.BuildTasks
             get { return (ITaskItem[])_store[nameof(References)]; }
         }
 
+        public bool RefOnly
+        {
+            set { _store[nameof(RefOnly)] = value; }
+            get { return _store.GetOrDefault(nameof(RefOnly), false); }
+        }
+
         public bool ReportAnalyzer
         {
             set { _store[nameof(ReportAnalyzer)] = value; }
@@ -267,6 +286,12 @@ namespace Microsoft.CodeAnalysis.BuildTasks
         {
             set { _store[nameof(ResponseFiles)] = value; }
             get { return (ITaskItem[])_store[nameof(ResponseFiles)]; }
+        }
+
+        public string SharedCompilationId
+        {
+            set { _store[nameof(SharedCompilationId)] = value; }
+            get { return (string)_store[nameof(SharedCompilationId)]; }
         }
 
         public bool SkipCompilerExecution
@@ -376,9 +401,88 @@ namespace Microsoft.CodeAnalysis.BuildTasks
             }
         }
 
+        public string LangVersion
+        {
+            set { _store[nameof(LangVersion)] = value; }
+            get { return (string)_store[nameof(LangVersion)]; }
+        }
+
         #endregion
 
-        internal abstract RequestLanguage Language { get; }
+        internal static DotnetHost CreateDotnetHostInfo(string toolPath, string toolExe, string toolName, string commandLine)
+        {
+            // ToolExe delegates back to ToolName if the override is not
+            // set.  So, if ToolExe == ToolName, we know ToolExe is not
+            // explicitly overriden.  So, if both ToolPath is unset and
+            // ToolExe == ToolName, we know nothing is overridden, and
+            // we can use our own csc.
+            if (string.IsNullOrEmpty(toolPath) && toolExe == toolName)
+            {
+                return DotnetHost.CreateManagedInvocationTool(toolName, commandLine);
+            }
+            else
+            {
+                // Explicitly provided ToolPath or ToolExe, don't try to
+                // figure anything out
+                return DotnetHost.CreateNativeInvocationTool(Path.Combine(toolPath ?? "", toolExe), commandLine);
+            }
+        }
+
+        private DotnetHost _dotnetHostInfo;
+        private DotnetHost DotnetHostInfo
+        {
+            get
+            {
+                if (_dotnetHostInfo is null)
+                {
+                    CommandLineBuilderExtension commandLineBuilder = new CommandLineBuilderExtension();
+                    AddCommandLineCommands(commandLineBuilder);
+                    var commandLine = commandLineBuilder.ToString();
+
+                    _dotnetHostInfo = CreateDotnetHostInfo(ToolPath, ToolExe, ToolName, commandLine);
+                }
+                return _dotnetHostInfo;
+            }
+        }
+
+        protected abstract string ToolNameWithoutExtension { get; }
+
+        internal static string GenerateToolName(string toolNameWithoutExtension)
+        {
+            if (CoreClrShim.IsRunningOnCoreClr)
+            {
+                return $"{toolNameWithoutExtension}.dll";
+            }
+            else
+            {
+                return $"{toolNameWithoutExtension}.exe";
+            }
+        }
+
+        protected sealed override string ToolName => GenerateToolName(ToolNameWithoutExtension);
+
+        /// <summary>
+        /// Method for testing only
+        /// </summary>
+        public string GeneratePathToTool()
+        {
+            return GenerateFullPathToTool();
+        }
+
+        /// <summary>
+        /// Return the path to the tool to execute.
+        /// </summary>
+        protected override string GenerateFullPathToTool()
+        {
+            var pathToTool = DotnetHostInfo.PathToToolOpt;
+
+            if (null == pathToTool)
+            {
+                Log.LogErrorWithCodeFromResources("General_ToolFileNotFound", ToolName);
+            }
+
+            return pathToTool;
+        }
 
         protected override int ExecuteTool(string pathToTool, string responseFileCommands, string commandLineCommands)
         {
@@ -393,39 +497,39 @@ namespace Microsoft.CodeAnalysis.BuildTasks
                 return 0;
             }
 
-            if (!UseSharedCompilation ||
-                !string.IsNullOrEmpty(ToolPath) ||
-                !Utilities.IsCompilerServerSupported)
+            try
             {
-                return base.ExecuteTool(pathToTool, responseFileCommands, commandLineCommands);
-            }
-
-            using (_sharedCompileCts = new CancellationTokenSource())
-            {
-                try
+                if (!UseSharedCompilation ||
+                !DotnetHostInfo.IsManagedInvocation ||
+                !BuildServerConnection.IsCompilerServerSupported)
                 {
+                    return base.ExecuteTool(pathToTool, responseFileCommands, commandLineCommands);
+                }
+
+                using (_sharedCompileCts = new CancellationTokenSource())
+                {
+
                     CompilerServerLogger.Log($"CommandLine = '{commandLineCommands}'");
                     CompilerServerLogger.Log($"BuildResponseFile = '{responseFileCommands}'");
 
-                    // Try to get the location of the user-provided build client and server,
-                    // which should be located next to the build task. If not, fall back to
-                    // "pathToTool", which is the compiler in the MSBuild default bin directory.
-                    var clientDir = TryGetClientDir() ?? Path.GetDirectoryName(pathToTool);
-                    pathToTool = Path.Combine(clientDir, ToolExe);
+                    var clientDir = Path.GetDirectoryName(pathToTool);
 
                     // Note: we can't change the "tool path" printed to the console when we run
                     // the Csc/Vbc task since MSBuild logs it for us before we get here. Instead,
                     // we'll just print our own message that contains the real client location
                     Log.LogMessage(ErrorString.UsingSharedCompilation, clientDir);
 
-                    var buildPaths = new BuildPaths(
+                    var workingDir = CurrentDirectoryToUse();
+                    var buildPaths = new BuildPathsAlt(
                         clientDir: clientDir,
                         // MSBuild doesn't need the .NET SDK directory
                         sdkDir: null,
-                        workingDir: CurrentDirectoryToUse());
+                        workingDir: workingDir,
+                        tempDir: BuildServerConnection.GetTempPath(workingDir));
 
-                    var responseTask = DesktopBuildClient.RunServerCompilation(
+                    var responseTask = BuildServerConnection.RunServerCompilation(
                         Language,
+                        string.IsNullOrEmpty(SharedCompilationId) ? null : SharedCompilationId,
                         GetArguments(commandLineCommands, responseFileCommands).ToList(),
                         buildPaths,
                         keepAlive: null,
@@ -446,69 +550,19 @@ namespace Microsoft.CodeAnalysis.BuildTasks
                         ExitCode = base.ExecuteTool(pathToTool, responseFileCommands, commandLineCommands);
                     }
                 }
-                catch (OperationCanceledException)
-                {
-                    ExitCode = 0;
-                }
-                catch (Exception e)
-                {
-                    Log.LogErrorWithCodeFromResources("Compiler_UnexpectedException");
-                    LogErrorOutput(e.ToString());
-                    ExitCode = -1;
-                }
             }
+            catch (OperationCanceledException)
+            {
+                ExitCode = 0;
+            }
+            catch (Exception e)
+            {
+                Log.LogErrorWithCodeFromResources("Compiler_UnexpectedException");
+                LogErrorOutput(e.ToString());
+                ExitCode = -1;
+            }
+
             return ExitCode;
-        }
-
-
-
-        /// <summary>
-        /// Try to get the directory this assembly is in. Returns null if assembly
-        /// was in the GAC or DLL location can not be retrieved.
-        /// </summary>
-        private static string TryGetClientDir()
-        {
-            var buildTask = typeof(ManagedCompiler).GetTypeInfo().Assembly;
-
-            var inGac = (bool?)typeof(Assembly)
-                .GetTypeInfo()
-                .GetDeclaredProperty("GlobalAssemblyCache")
-                ?.GetMethod.Invoke(buildTask, parameters: null);
-
-            if (inGac != false)
-                return null;
-
-            var codeBase = (string)typeof(Assembly)
-                .GetTypeInfo()
-                .GetDeclaredProperty("CodeBase")
-                ?.GetMethod.Invoke(buildTask, parameters: null);
-
-            if (codeBase == null) return null;
-
-            var uri = new Uri(codeBase);
-
-            string assemblyPath;
-            if (uri.IsFile)
-            {
-                assemblyPath = uri.LocalPath;
-            }
-            else
-            {
-                var callingAssembly = (Assembly)typeof(Assembly)
-                    .GetTypeInfo()
-                    .GetDeclaredMethod("GetCallingAssembly")
-                    ?.Invoke(null, null);
-
-                var location = (string)typeof(Assembly)
-                    .GetTypeInfo()
-                    .GetDeclaredProperty("Location")
-                    ?.GetMethod.Invoke(callingAssembly, parameters: null);
-
-                if (location == null) return null;
-
-                assemblyPath = location;
-            }
-            return Path.GetDirectoryName(assemblyPath);
         }
 
         /// <summary>
@@ -530,7 +584,9 @@ namespace Microsoft.CodeAnalysis.BuildTasks
             // if ToolTask didn't override. MSBuild uses the process directory.
             string workingDirectory = GetWorkingDirectory();
             if (string.IsNullOrEmpty(workingDirectory))
+            {
                 workingDirectory = Directory.GetCurrentDirectory();
+            }
             return workingDirectory;
         }
 
@@ -571,12 +627,13 @@ namespace Microsoft.CodeAnalysis.BuildTasks
         /// </summary>
         private int HandleResponse(BuildResponse response, string pathToTool, string responseFileCommands, string commandLineCommands)
         {
+            if (response.Type != BuildResponse.ResponseType.Completed)
+            {
+                ValidateBootstrapUtil.AddFailedServerConnection();
+            }
+
             switch (response.Type)
             {
-                case BuildResponse.ResponseType.MismatchedVersion:
-                    LogErrorOutput(CommandLineParser.MismatchedVersionErrorText);
-                    return -1;
-
                 case BuildResponse.ResponseType.Completed:
                     var completedResponse = (CompletedBuildResponse)response;
                     LogMessages(completedResponse.Output, StandardOutputImportanceToUse);
@@ -592,16 +649,26 @@ namespace Microsoft.CodeAnalysis.BuildTasks
 
                     return completedResponse.ReturnCode;
 
+                case BuildResponse.ResponseType.MismatchedVersion:
+                    LogErrorOutput("Roslyn compiler server reports different protocol version than build task.");
+                    return base.ExecuteTool(pathToTool, responseFileCommands, commandLineCommands);
+
                 case BuildResponse.ResponseType.Rejected:
                 case BuildResponse.ResponseType.AnalyzerInconsistency:
                     return base.ExecuteTool(pathToTool, responseFileCommands, commandLineCommands);
 
                 default:
-                    throw new InvalidOperationException("Encountered unknown response type");
+                    LogErrorOutput($"Recieved an unrecognized response from the server: {response.Type}");
+                    return base.ExecuteTool(pathToTool, responseFileCommands, commandLineCommands);
             }
         }
 
         private void LogErrorOutput(string output)
+        {
+            LogErrorOutput(output, Log);
+        }
+
+        internal static void LogErrorOutput(string output, TaskLoggingHelper log)
         {
             string[] lines = output.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
             foreach (string line in lines)
@@ -609,7 +676,7 @@ namespace Microsoft.CodeAnalysis.BuildTasks
                 string trimmedMessage = line.Trim();
                 if (trimmedMessage != "")
                 {
-                    Log.LogError(trimmedMessage);
+                    log.LogError(trimmedMessage);
                 }
             }
         }
@@ -634,9 +701,9 @@ namespace Microsoft.CodeAnalysis.BuildTasks
         private string[] GetArguments(string commandLineCommands, string responseFileCommands)
         {
             var commandLineArguments =
-                CommandLineParser.SplitCommandLineIntoArguments(commandLineCommands, removeHashComments: true);
+                CommandLineUtilities.SplitCommandLineIntoArguments(commandLineCommands, removeHashComments: true);
             var responseFileArguments =
-                CommandLineParser.SplitCommandLineIntoArguments(responseFileCommands, removeHashComments: true);
+                CommandLineUtilities.SplitCommandLineIntoArguments(responseFileCommands, removeHashComments: true);
             return commandLineArguments.Concat(responseFileArguments).ToArray();
         }
 
@@ -652,11 +719,17 @@ namespace Microsoft.CodeAnalysis.BuildTasks
             return commandLineBuilder.ToString();
         }
 
+        /// <summary>
+        /// Method for testing only
+        /// </summary>
+        public string GenerateCommandLine()
+        {
+            return GenerateCommandLineCommands();
+        }
+
         protected override string GenerateCommandLineCommands()
         {
-            CommandLineBuilderExtension commandLineBuilder = new CommandLineBuilderExtension();
-            AddCommandLineCommands(commandLineBuilder);
-            return commandLineBuilder.ToString();
+            return DotnetHostInfo.CommandLineArgs;
         }
 
         /// <summary>
@@ -729,6 +802,8 @@ namespace Microsoft.CodeAnalysis.BuildTasks
             commandLine.AppendPlusOrMinusSwitch("/optimize", _store, nameof(Optimize));
             commandLine.AppendSwitchIfNotNull("/pathmap:", PathMap);
             commandLine.AppendSwitchIfNotNull("/out:", OutputAssembly);
+            commandLine.AppendSwitchIfNotNull("/refout:", OutputRefAssembly);
+            commandLine.AppendWhenTrue("/refonly", _store, nameof(RefOnly));
             commandLine.AppendSwitchIfNotNull("/ruleset:", CodeAnalysisRuleSet);
             commandLine.AppendSwitchIfNotNull("/errorlog:", ErrorLog);
             commandLine.AppendSwitchIfNotNull("/subsystemversion:", SubsystemVersion);
@@ -757,6 +832,7 @@ namespace Microsoft.CodeAnalysis.BuildTasks
             commandLine.AppendSwitchIfNotNull("/checksumalgorithm:", ChecksumAlgorithm);
             commandLine.AppendSwitchWithSplitting("/instrument:", Instrument, ",", ';', ',');
             commandLine.AppendSwitchIfNotNull("/sourcelink:", SourceLink);
+            commandLine.AppendSwitchIfNotNull("/langversion:", LangVersion);
 
             AddFeatures(commandLine, Features);
             AddEmbeddedFilesToCommandLine(commandLine);

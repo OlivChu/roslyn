@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports Microsoft.CodeAnalysis.Structure
 Imports Microsoft.CodeAnalysis.VisualBasic.Structure
@@ -23,7 +23,7 @@ Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.Outlining.Metadata
         Public Async Function NoCommentsOrAttributes() As Task
             Dim code = "
 Enum E
-    $$Foo
+    $$Goo
     Bar
 End Enum
 "
@@ -35,30 +35,30 @@ End Enum
         Public Async Function WithAttributes() As Task
             Dim code = "
 Enum E
-    {|hint:{|collapse:<Blah>
-    |}$$Foo|}
+    {|hint:{|textspan:<Blah>
+    |}$$Goo|}
     Bar
 End Enum
 "
 
             Await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
+                Region("textspan", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
         End Function
 
         <Fact, Trait(Traits.Feature, Traits.Features.MetadataAsSource)>
         Public Async Function WithCommentsAndAttributes() As Task
             Dim code = "
 Enum E
-    {|hint:{|collapse:' Summary:
+    {|hint:{|textspan:' Summary:
     '     This is a summary.
     <Blah>
-    |}$$Foo|}
+    |}$$Goo|}
     Bar
 End Enum
 "
 
             Await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
+                Region("textspan", "hint", VisualBasicOutliningHelpers.Ellipsis, autoCollapse:=True))
         End Function
     End Class
 End Namespace

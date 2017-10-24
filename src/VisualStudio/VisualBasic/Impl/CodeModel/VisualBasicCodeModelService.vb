@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Text
 Imports System.Threading
@@ -1048,6 +1048,14 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.CodeModel
             Return GetExternalSymbolFullName(symbol)
         End Function
 
+        Public Overrides Function IsExpressionBodiedProperty(node As SyntaxNode) As Boolean
+            Return False
+        End Function
+
+        Public Overrides Function TryGetAutoPropertyExpressionBody(parentNode As SyntaxNode, ByRef accessorNode As SyntaxNode) As Boolean
+            Return False
+        End Function
+
         Public Overrides Function IsAccessorNode(node As SyntaxNode) As Boolean
             Select Case node.Kind
                 Case SyntaxKind.GetAccessorBlock,
@@ -1379,6 +1387,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.CodeModel
             Return symbol.DeclaredAccessibility = Accessibility.Public OrElse
                    symbol.DeclaredAccessibility = Accessibility.Protected OrElse
                    symbol.DeclaredAccessibility = Accessibility.ProtectedOrFriend OrElse
+                   symbol.DeclaredAccessibility = Accessibility.ProtectedAndFriend OrElse
                    symbol.DeclaredAccessibility = Accessibility.Friend
         End Function
 
@@ -1412,6 +1421,10 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.CodeModel
                     access = access Or EnvDTE.vsCMAccess.vsCMAccessProject
                 Case Accessibility.ProtectedOrInternal, Accessibility.ProtectedOrFriend
                     access = access Or EnvDTE.vsCMAccess.vsCMAccessProjectOrProtected
+                Case Accessibility.ProtectedAndInternal, Accessibility.ProtectedAndFriend
+                    ' there is no appropriate mapping for private protected in EnvDTE.vsCMAccess
+                    ' See https://github.com/dotnet/roslyn/issues/22406
+                    access = access Or EnvDTE.vsCMAccess.vsCMAccessProject
                 Case Accessibility.Public
                     access = access Or EnvDTE.vsCMAccess.vsCMAccessPublic
                 Case Else
@@ -2179,7 +2192,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.CodeModel
                 If trivia.Kind = SyntaxKind.CommentTrivia Then
                     firstCommentFound = True
                     commentList.Add(trivia)
-                ElseIf Not firstCommentFound AndAlso trivia.IsWhitespace() Then
+                ElseIf Not firstCommentFound AndAlso trivia.IsWhitespaceOrEndOfLine() Then
                     Continue For
                 ElseIf firstCommentFound AndAlso trivia.Kind = SyntaxKind.EndOfLineTrivia AndAlso nextTrivia.Kind = SyntaxKind.CommentTrivia Then
                     Continue For

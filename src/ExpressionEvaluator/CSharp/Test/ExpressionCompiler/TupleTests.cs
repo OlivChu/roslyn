@@ -1,17 +1,21 @@
 ﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
+using System;
+using System.Collections.Immutable;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
 using Microsoft.CodeAnalysis.CodeGen;
 using Microsoft.CodeAnalysis.CSharp.Symbols;
 using Microsoft.CodeAnalysis.CSharp.Test.Utilities;
 using Microsoft.CodeAnalysis.ExpressionEvaluator;
 using Microsoft.CodeAnalysis.ExpressionEvaluator.UnitTests;
+using Microsoft.CodeAnalysis.PooledObjects;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Microsoft.VisualStudio.Debugger.Clr;
 using Microsoft.VisualStudio.Debugger.Evaluation;
 using Microsoft.VisualStudio.Debugger.Evaluation.ClrCompilation;
 using Roslyn.Test.Utilities;
-using System.Collections.Immutable;
-using System.Collections.ObjectModel;
-using System.Linq;
 using Xunit;
 
 namespace Microsoft.CodeAnalysis.CSharp.ExpressionEvaluator.UnitTests
@@ -29,8 +33,8 @@ namespace Microsoft.CodeAnalysis.CSharp.ExpressionEvaluator.UnitTests
         (int, int) o;
     }
 }";
-            var comp = CreateCompilationWithMscorlib(source, new[] { ValueTupleRef }, options: TestOptions.DebugDll);
-            WithRuntimeInstance(comp, runtime =>
+            var comp = CreateStandardCompilation(source, new[] { ValueTupleRef, SystemRuntimeFacadeRef }, options: TestOptions.DebugDll);
+            WithRuntimeInstance(comp, new[] { ValueTupleRef, SystemRuntimeFacadeRef, MscorlibRef }, runtime =>
             {
                 var context = CreateMethodContext(runtime, "C.M");
                 var testData = new CompilationTestData();
@@ -51,13 +55,90 @@ namespace Microsoft.CodeAnalysis.CSharp.ExpressionEvaluator.UnitTests
 @"{
   // Code size        8 (0x8)
   .maxstack  2
-  .locals init (System.ValueTuple<int, int> V_0) //o
+  .locals init ((int, int) V_0) //o
   IL_0000:  ldc.i4.1
   IL_0001:  ldc.i4.2
   IL_0002:  newobj     ""System.ValueTuple<int, int>..ctor(int, int)""
   IL_0007:  ret
 }");
             });
+        }
+
+        [Fact]
+        public void DuplicateValueTupleBetweenMscorlibAndLibrary()
+        {
+            var versionTemplate = @"[assembly: System.Reflection.AssemblyVersion(""{0}.0.0.0"")]";
+
+            var corlib_cs = @"
+namespace System
+{
+    public class Object { }
+    public struct Int32 { }
+    public struct Boolean { }
+    public class String { }
+    public class ValueType { }
+    public struct Void { }
+    public class Attribute { }
+}
+
+namespace System.Reflection
+{
+    public class AssemblyVersionAttribute : Attribute
+    {
+        public AssemblyVersionAttribute(String version) { }
+    }
+}";
+            string valuetuple_cs = @"
+namespace System
+{
+    public struct ValueTuple<T1, T2>
+    {
+        public T1 Item1;
+        public T2 Item2;
+        public ValueTuple(T1 item1, T2 item2) => (Item1, Item2) = (item1, item2);
+    }
+}";
+            var corlibWithoutVT = CreateCompilation(new[] { Parse(String.Format(versionTemplate, "1") + corlib_cs) }, assemblyName: "corlib");
+            corlibWithoutVT.VerifyDiagnostics();
+            var corlibWithoutVTRef = corlibWithoutVT.EmitToImageReference();
+
+            var corlibWithVT = CreateCompilation(new[] { Parse(String.Format(versionTemplate, "2") + corlib_cs + valuetuple_cs) }, assemblyName: "corlib");
+            corlibWithVT.VerifyDiagnostics();
+
+            var source =
+@"class C
+{
+    static (int, int) M()
+    {
+        (int, int) t = (1, 2);
+        return t;
+    }
+}
+";
+            var app = CreateCompilation(source + valuetuple_cs, references: new[] { corlibWithoutVTRef }, options: TestOptions.DebugDll);
+            app.VerifyDiagnostics();
+
+            // Create EE context with app assembly (including ValueTuple) and a more recent corlib (also including ValueTuple)
+            var runtime = CreateRuntimeInstance(new[] { app.ToModuleInstance(), corlibWithVT.ToModuleInstance() });
+            var evalContext = CreateMethodContext(runtime, "C.M");
+            string error;
+            var testData = new CompilationTestData();
+            var compileResult = evalContext.CompileExpression("(1, 2)", out error, testData);
+            Assert.Null(error);
+
+            using (ModuleMetadata block = ModuleMetadata.CreateFromStream(new MemoryStream(compileResult.Assembly)))
+            {
+                var reader = block.MetadataReader;
+
+                var appRef = app.Assembly.Identity.Name;
+                AssertEx.SetEqual(new[] { "corlib 2.0", appRef + " 0.0" }, reader.DumpAssemblyReferences());
+
+                AssertEx.SetEqual(new[] {
+                        "Object, System, AssemblyReference:corlib",
+                        "ValueTuple`2, System, AssemblyReference:" + appRef, // ValueTuple comes from app, not corlib
+                        ", System, AssemblyReference:" + appRef },
+                    reader.DumpTypeReferences());
+            }
         }
 
         [Fact]
@@ -84,7 +165,7 @@ class C
         (int, int) o;
     }
 }";
-            var comp = CreateCompilationWithMscorlib(source, options: TestOptions.DebugDll);
+            var comp = CreateStandardCompilation(source, options: TestOptions.DebugDll);
             WithRuntimeInstance(comp, runtime =>
             {
                 var context = CreateMethodContext(runtime, "C.M");
@@ -103,7 +184,7 @@ class C
 @"{
   // Code size        8 (0x8)
   .maxstack  2
-  .locals init (System.ValueTuple<int, int> V_0) //o
+  .locals init ((int, int) V_0) //o
   IL_0000:  ldc.i4.1
   IL_0001:  ldc.i4.2
   IL_0002:  newobj     ""System.ValueTuple<int, int>..ctor(int, int)""
@@ -123,8 +204,8 @@ class C
         (int A\u1234, int \u1234B) o = (1, 2);
     }
 }";
-            var comp = CreateCompilationWithMscorlib(source, new[] { ValueTupleRef }, options: TestOptions.DebugDll);
-            WithRuntimeInstance(comp, runtime =>
+            var comp = CreateStandardCompilation(source, new[] { ValueTupleRef, SystemRuntimeFacadeRef }, options: TestOptions.DebugDll);
+            WithRuntimeInstance(comp, new[] { ValueTupleRef, SystemRuntimeFacadeRef, MscorlibRef }, runtime =>
             {
                 var context = CreateMethodContext(runtime, "C.M");
                 var testData = new CompilationTestData();
@@ -171,8 +252,8 @@ class C
         const A<(int, int A)>.B<(object B, object)>[] c = null;
     }
 }";
-            var comp = CreateCompilationWithMscorlib(source, new[] { ValueTupleRef }, options: TestOptions.DebugDll);
-            WithRuntimeInstance(comp, runtime =>
+            var comp = CreateStandardCompilation(source, new[] { ValueTupleRef, SystemRuntimeFacadeRef }, options: TestOptions.DebugDll);
+            WithRuntimeInstance(comp, new[] { ValueTupleRef, SystemRuntimeFacadeRef, MscorlibRef }, runtime =>
             {
                 var context = CreateMethodContext(runtime, "C.M");
                 var testData = new CompilationTestData();
@@ -201,7 +282,77 @@ class C
                 locals.Free();
             });
         }
-        
+
+        [WorkItem(13803, "https://github.com/dotnet/roslyn/issues/13803")]
+        [Fact]
+        public void LongTupleLocalElement_NoNames()
+        {
+            var source =
+@"class C
+{
+    static void M()
+    {
+        var x = (1, 2, 3, 4, 5, 6, 7, 8);
+    }
+}";
+            var comp = CreateStandardCompilation(source, new[] { SystemRuntimeFacadeRef, ValueTupleRef }, options: TestOptions.DebugDll);
+            WithRuntimeInstance(comp, new[] { MscorlibRef, SystemCoreRef, SystemRuntimeFacadeRef, ValueTupleRef }, runtime =>
+            {
+                var context = CreateMethodContext(runtime, "C.M");
+                var testData = new CompilationTestData();
+                string error;
+                context.CompileExpression("x.Item4 + x.Item8", out error, testData);
+                testData.GetMethodData("<>x.<>m0").VerifyIL(
+@"{
+  // Code size       19 (0x13)
+  .maxstack  2
+  .locals init ((int, int, int, int, int, int, int, int) V_0) //x
+  IL_0000:  ldloc.0
+  IL_0001:  ldfld      ""int System.ValueTuple<int, int, int, int, int, int, int, ValueTuple<int>>.Item4""
+  IL_0006:  ldloc.0
+  IL_0007:  ldfld      ""ValueTuple<int> System.ValueTuple<int, int, int, int, int, int, int, ValueTuple<int>>.Rest""
+  IL_000c:  ldfld      ""int System.ValueTuple<int>.Item1""
+  IL_0011:  add
+  IL_0012:  ret
+}");
+            });
+        }
+
+        [Fact]
+        public void LongTupleLocalElement_Names()
+        {
+            var source =
+@"class C
+{
+    static void M()
+    {
+        var x = (1, 2, Three: 3, Four: 4, 5, 6, 7, Eight: 8);
+    }
+}";
+            var comp = CreateStandardCompilation(source, new[] { SystemRuntimeFacadeRef, ValueTupleRef }, options: TestOptions.DebugDll);
+            WithRuntimeInstance(comp, new[] { MscorlibRef, SystemCoreRef, SystemRuntimeFacadeRef, ValueTupleRef }, runtime =>
+            {
+                var context = CreateMethodContext(runtime, "C.M");
+                var testData = new CompilationTestData();
+                string error;
+                context.CompileExpression("x.Item8 + x.Eight", out error, testData);
+                testData.GetMethodData("<>x.<>m0").VerifyIL(
+@"{
+  // Code size       24 (0x18)
+  .maxstack  2
+  .locals init ((int, int, int Three, int Four, int, int, int, int Eight) V_0) //x
+  IL_0000:  ldloc.0
+  IL_0001:  ldfld      ""ValueTuple<int> System.ValueTuple<int, int, int, int, int, int, int, ValueTuple<int>>.Rest""
+  IL_0006:  ldfld      ""int System.ValueTuple<int>.Item1""
+  IL_000b:  ldloc.0
+  IL_000c:  ldfld      ""ValueTuple<int> System.ValueTuple<int, int, int, int, int, int, int, ValueTuple<int>>.Rest""
+  IL_0011:  ldfld      ""int System.ValueTuple<int>.Item1""
+  IL_0016:  add
+  IL_0017:  ret
+}");
+            });
+        }
+
         [Fact]
         public void DeclareLocal()
         {
@@ -213,8 +364,8 @@ class C
         var x = (1, 2);
     }
 }";
-            var comp = CreateCompilationWithMscorlib(source, new[] { ValueTupleRef }, options: TestOptions.DebugDll);
-            WithRuntimeInstance(comp, runtime =>
+            var comp = CreateStandardCompilation(source, new[] { ValueTupleRef, SystemRuntimeFacadeRef }, options: TestOptions.DebugDll);
+            WithRuntimeInstance(comp, new[] { ValueTupleRef, SystemRuntimeFacadeRef, MscorlibRef }, runtime =>
             {
                 var context = CreateMethodContext(runtime, "C.M");
                 var testData = new CompilationTestData();
@@ -244,9 +395,9 @@ class C
                 Assert.Null(GetTupleElementNamesAttributeIfAny(method));
                 methodData.VerifyIL(
 @"{
-  // Code size       60 (0x3c)
+  // Code size       64 (0x40)
   .maxstack  6
-  .locals init (System.ValueTuple<int, int> V_0) //x
+  .locals init ((int, int) V_0) //x
   IL_0000:  ldtoken    ""System.ValueTuple<int, int>""
   IL_0005:  call       ""System.Type System.Type.GetTypeFromHandle(System.RuntimeTypeHandle)""
   IL_000a:  ldstr      ""y""
@@ -261,8 +412,8 @@ class C
   IL_002f:  ldstr      ""y""
   IL_0034:  call       ""(int A, int B) Microsoft.VisualStudio.Debugger.Clr.IntrinsicMethods.GetVariableAddress<(int A, int B)>(string)""
   IL_0039:  ldloc.0
-  IL_003a:  stind.ref
-  IL_003b:  ret
+  IL_003a:  stobj      ""System.ValueTuple<int, int>""
+  IL_003f:  ret
 }");
             });
         }
@@ -279,8 +430,8 @@ class C
     {
     }
 }";
-            var comp = CreateCompilationWithMscorlib(source, new[] { ValueTupleRef }, options: TestOptions.DebugDll);
-            WithRuntimeInstance(comp, runtime =>
+            var comp = CreateStandardCompilation(source, new[] { ValueTupleRef, SystemRuntimeFacadeRef }, options: TestOptions.DebugDll);
+            WithRuntimeInstance(comp, new[] { ValueTupleRef, SystemRuntimeFacadeRef, MscorlibRef }, runtime =>
             {
                 var context = CreateMethodContext(
                     runtime,
@@ -329,6 +480,74 @@ class C
   IL_000f:  ret
 }");
                 locals.Free();
+            });
+        }
+
+        [WorkItem(13803, "https://github.com/dotnet/roslyn/issues/13803")]
+        [Fact]
+        public void AliasElement_NoNames()
+        {
+            var source =
+@"class C
+{
+    static (int, int) F;
+    static void M()
+    {
+    }
+}";
+            var comp = CreateStandardCompilation(source, new[] { SystemRuntimeFacadeRef, ValueTupleRef }, options: TestOptions.DebugDll);
+            WithRuntimeInstance(comp, new[] { MscorlibRef, SystemCoreRef, SystemRuntimeFacadeRef, ValueTupleRef }, runtime =>
+            {
+                var context = CreateMethodContext(runtime, "C.M");
+                var alias = new Alias(
+                    DkmClrAliasKind.Variable,
+                    "x",
+                    "x",
+                    "System.ValueTuple`8[" +
+                        "[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]," +
+                        "[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]," +
+                        "[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]," +
+                        "[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]," +
+                        "[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]," +
+                        "[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]," +
+                        "[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]," +
+                        "[System.ValueTuple`2[" +
+                            "[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]," +
+                            "[System.Int32, mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089]], " +
+                        "System.ValueTuple, Version=4.0.1.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51]], " +
+                    "System.ValueTuple, Version=4.0.1.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51",
+                    Guid.Empty,
+                    null);
+                ResultProperties resultProperties;
+                string error;
+                ImmutableArray<AssemblyIdentity> missingAssemblyIdentities;
+                var testData = new CompilationTestData();
+                context.CompileExpression(
+                    "x.Item4 + x.Item8",
+                    DkmEvaluationFlags.TreatAsExpression,
+                    ImmutableArray.Create(alias),
+                    DebuggerDiagnosticFormatter.Instance,
+                    out resultProperties,
+                    out error,
+                    out missingAssemblyIdentities,
+                    null,
+                    testData);
+                testData.GetMethodData("<>x.<>m0").VerifyIL(
+@"{
+  // Code size       47 (0x2f)
+  .maxstack  2
+  IL_0000:  ldstr      ""x""
+  IL_0005:  call       ""object Microsoft.VisualStudio.Debugger.Clr.IntrinsicMethods.GetObjectByAlias(string)""
+  IL_000a:  unbox.any  ""System.ValueTuple<int, int, int, int, int, int, int, (int, int)>""
+  IL_000f:  ldfld      ""int System.ValueTuple<int, int, int, int, int, int, int, (int, int)>.Item4""
+  IL_0014:  ldstr      ""x""
+  IL_0019:  call       ""object Microsoft.VisualStudio.Debugger.Clr.IntrinsicMethods.GetObjectByAlias(string)""
+  IL_001e:  unbox.any  ""System.ValueTuple<int, int, int, int, int, int, int, (int, int)>""
+  IL_0023:  ldfld      ""(int, int) System.ValueTuple<int, int, int, int, int, int, int, (int, int)>.Rest""
+  IL_0028:  ldfld      ""int System.ValueTuple<int, int>.Item1""
+  IL_002d:  add
+  IL_002e:  ret
+}");
             });
         }
     }

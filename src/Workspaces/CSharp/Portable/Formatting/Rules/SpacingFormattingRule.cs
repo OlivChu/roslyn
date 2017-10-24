@@ -124,26 +124,24 @@ namespace Microsoft.CodeAnalysis.CSharp.Formatting
                 return AdjustSpacesOperationZeroOrOne(optionSet, CSharpFormattingOptions.SpaceWithinCastParentheses);
             }
 
+            // Semicolons in an empty for statement.  i.e.   for(;;)
+            if (previousParentKind == SyntaxKind.ForStatement
+                && this.IsEmptyForStatement((ForStatementSyntax)previousToken.Parent))
+            {
+                if (currentKind == SyntaxKind.SemicolonToken
+                    && (previousKind != SyntaxKind.SemicolonToken
+                        || optionSet.GetOption<bool>(CSharpFormattingOptions.SpaceBeforeSemicolonsInForStatement)))
+                {
+                    return AdjustSpacesOperationZeroOrOne(optionSet, CSharpFormattingOptions.SpaceBeforeSemicolonsInForStatement);
+                }
+
+                return AdjustSpacesOperationZeroOrOne(optionSet, CSharpFormattingOptions.SpaceAfterSemicolonsInForStatement);
+            }
+
             // For spacing between the parenthesis and the expression inside the control flow expression
             if (previousKind == SyntaxKind.OpenParenToken && IsControlFlowLikeKeywordStatementKind(previousParentKind))
             {
                 return AdjustSpacesOperationZeroOrOne(optionSet, CSharpFormattingOptions.SpaceWithinOtherParentheses);
-            }
-
-            // Semicolons in an empty for statement.  i.e.   for(;;)
-            if (previousKind == SyntaxKind.OpenParenToken || previousKind == SyntaxKind.SemicolonToken)
-            {
-                if (previousToken.Parent.Kind() == SyntaxKind.ForStatement)
-                {
-                    var forStatement = (ForStatementSyntax)previousToken.Parent;
-                    if (forStatement.Initializers.Count == 0 &&
-                        forStatement.Declaration == null &&
-                        forStatement.Condition == null &&
-                        forStatement.Incrementors.Count == 0)
-                    {
-                        return CreateAdjustSpacesOperation(0, AdjustSpacesOption.ForceSpaces);
-                    }
-                }
             }
 
             if (currentKind == SyntaxKind.CloseParenToken && IsControlFlowLikeKeywordStatementKind(currentParentKind))
@@ -337,6 +335,12 @@ namespace Microsoft.CodeAnalysis.CSharp.Formatting
             SuppressVariableDeclaration(list, node, optionSet);
         }
 
+        private bool IsEmptyForStatement(ForStatementSyntax forStatement) =>
+            forStatement.Initializers.Count == 0
+            && forStatement.Declaration == null
+            && forStatement.Condition == null
+            && forStatement.Incrementors.Count == 0;
+
         private void SuppressVariableDeclaration(List<SuppressOperation> list, SyntaxNode node, OptionSet optionSet)
         {
             if (node.IsKind(SyntaxKind.FieldDeclaration) || node.IsKind(SyntaxKind.EventDeclaration) ||
@@ -377,7 +381,7 @@ namespace Microsoft.CodeAnalysis.CSharp.Formatting
         private bool IsControlFlowLikeKeywordStatementKind(SyntaxKind syntaxKind)
         {
             return (syntaxKind == SyntaxKind.IfStatement || syntaxKind == SyntaxKind.WhileStatement || syntaxKind == SyntaxKind.SwitchStatement ||
-                syntaxKind == SyntaxKind.ForStatement || syntaxKind == SyntaxKind.ForEachStatement || syntaxKind == SyntaxKind.ForEachComponentStatement ||
+                syntaxKind == SyntaxKind.ForStatement || syntaxKind == SyntaxKind.ForEachStatement || syntaxKind == SyntaxKind.ForEachVariableStatement ||
                 syntaxKind == SyntaxKind.DoStatement ||
                 syntaxKind == SyntaxKind.CatchDeclaration || syntaxKind == SyntaxKind.UsingStatement || syntaxKind == SyntaxKind.LockStatement ||
                 syntaxKind == SyntaxKind.FixedStatement || syntaxKind == SyntaxKind.CatchFilterClause);

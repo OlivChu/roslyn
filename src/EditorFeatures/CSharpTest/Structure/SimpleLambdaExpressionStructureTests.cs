@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Structure;
@@ -21,14 +21,14 @@ class C
 {
     void M()
     {
-        {|hint:$$f => {|collapse:{
+        {|hint:$$f => {|textspan:{
             x();
         };|}|}
     }
 }";
 
             await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: false));
+                Region("textspan", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: false));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.Outlining)]
@@ -54,14 +54,14 @@ class C
 {
     void M()
     {
-        someMethod(42, ""test"", false, {|hint:$$x => {|collapse:{
+        someMethod(42, ""test"", false, {|hint:$$x => {|textspan:{
             return x;
         }|}|}, ""other arguments}"");
     }
 }";
 
             await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: false));
+                Region("textspan", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: false));
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.Outlining)]
@@ -72,14 +72,14 @@ class C
 {
     void M()
     {
-        someMethod(42, ""test"", false, {|hint:$$x => {|collapse:{
+        someMethod(42, ""test"", false, {|hint:$$x => {|textspan:{
             return x;
         }|}|});
     }
 }";
 
             await VerifyBlockSpansAsync(code,
-                Region("collapse", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: false));
+                Region("textspan", "hint", CSharpStructureHelpers.Ellipsis, autoCollapse: false));
         }
     }
 }

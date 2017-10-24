@@ -3,6 +3,7 @@
 Imports System.Collections.Immutable
 Imports System.Diagnostics
 Imports System.Runtime.InteropServices
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
@@ -13,7 +14,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
     Partial Friend NotInheritable Class LocalRewriter
 
         Private Function WrapInNullable(expr As BoundExpression, nullableType As TypeSymbol) As BoundExpression
-            Debug.Assert(nullableType.GetNullableUnderlyingType.IsSameTypeIgnoringCustomModifiers(expr.Type))
+            Debug.Assert(nullableType.GetNullableUnderlyingType.IsSameTypeIgnoringAll(expr.Type))
 
             Dim ctor = GetNullableMethod(expr.Syntax, nullableType, SpecialMember.System_Nullable_T__ctor)
 
@@ -25,7 +26,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                                                      nullableType)
             End If
 
-            Return New BoundBadExpression(expr.Syntax, LookupResultKind.NotReferencable, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(Of BoundNode)(expr), nullableType, hasErrors:=True)
+            Return New BoundBadExpression(expr.Syntax, LookupResultKind.NotReferencable, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(expr), nullableType, hasErrors:=True)
         End Function
 
         ''' <summary>
@@ -180,7 +181,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                                  type:=getValueOrDefaultMethod.ReturnType)
             End If
 
-            Return New BoundBadExpression(expr.Syntax, LookupResultKind.NotReferencable, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(Of BoundNode)(expr), expr.Type.GetNullableUnderlyingType(), hasErrors:=True)
+            Return New BoundBadExpression(expr.Syntax, LookupResultKind.NotReferencable, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(expr), expr.Type.GetNullableUnderlyingType(), hasErrors:=True)
         End Function
 
         Private Function NullableValue(expr As BoundExpression) As BoundExpression
@@ -204,7 +205,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                                  type:=getValueMethod.ReturnType)
             End If
 
-            Return New BoundBadExpression(expr.Syntax, LookupResultKind.NotReferencable, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(Of BoundNode)(expr), expr.Type.GetNullableUnderlyingType(), hasErrors:=True)
+            Return New BoundBadExpression(expr.Syntax, LookupResultKind.NotReferencable, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(expr), expr.Type.GetNullableUnderlyingType(), hasErrors:=True)
         End Function
 
         ''' <summary>
@@ -232,7 +233,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                                  type:=hasValueMethod.ReturnType)
             End If
 
-            Return New BoundBadExpression(expr.Syntax, LookupResultKind.NotReferencable, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(Of BoundNode)(expr),
+            Return New BoundBadExpression(expr.Syntax, LookupResultKind.NotReferencable, ImmutableArray(Of Symbol).Empty, ImmutableArray.Create(expr),
                                           Me.Compilation.GetSpecialType(SpecialType.System_Boolean), hasErrors:=True)
         End Function
 
@@ -258,7 +259,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
             ' in case if the expression is any more complicated than just creating a Null
             ' simplify it. This may happen if HasNoValue gets smarter and can
             ' detect situations other than "New T?()"
-            If (Not type.IsSameTypeIgnoringCustomModifiers(candidateNullExpression.Type)) OrElse
+            If (Not type.IsSameTypeIgnoringAll(candidateNullExpression.Type)) OrElse
                 candidateNullExpression.Kind <> BoundKind.ObjectCreationExpression Then
 
                 Return NullableNull(candidateNullExpression.Syntax, type)
@@ -487,7 +488,7 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
                                                           whenFalse As BoundExpression) As BoundExpression
 
             Debug.Assert(condition.Type.IsBooleanType, "ternary condition must be boolean")
-            Debug.Assert(whenTrue.Type.IsSameTypeIgnoringCustomModifiers(whenFalse.Type), "ternary branches must have same types")
+            Debug.Assert(whenTrue.Type.IsSameTypeIgnoringAll(whenFalse.Type), "ternary branches must have same types")
 
             Dim ifConditionConst = condition.ConstantValueOpt
             If ifConditionConst IsNot Nothing Then

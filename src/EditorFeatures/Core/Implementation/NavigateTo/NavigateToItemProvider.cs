@@ -1,10 +1,10 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 using System.Threading;
-using Microsoft.CodeAnalysis.Editor.Extensibility.Composition;
 using Microsoft.CodeAnalysis.Shared.TestHooks;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Language.NavigateTo.Interfaces;
@@ -16,25 +16,20 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.NavigateTo
     {
         private readonly Workspace _workspace;
         private readonly IAsynchronousOperationListener _asyncListener;
-        private readonly ImmutableArray<Lazy<INavigateToOptionsService, VisualStudioVersionMetadata>> _optionsServices;
-        private readonly ItemDisplayFactory _displayFactory;
+        private readonly INavigateToItemDisplayFactory _displayFactory;
 
         private CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
 
         public NavigateToItemProvider(
             Workspace workspace,
-            IGlyphService glyphService,
-            IAsynchronousOperationListener asyncListener,
-            IEnumerable<Lazy<INavigateToOptionsService, VisualStudioVersionMetadata>> optionsServices)
+            IAsynchronousOperationListener asyncListener)
         {
             Contract.ThrowIfNull(workspace);
-            Contract.ThrowIfNull(glyphService);
             Contract.ThrowIfNull(asyncListener);
 
             _workspace = workspace;
             _asyncListener = asyncListener;
-            _optionsServices = optionsServices.ToImmutableArray();
-            _displayFactory = new ItemDisplayFactory(new NavigateToIconFactory(glyphService));
+            _displayFactory = new NavigateToItemDisplayFactory();
         }
 
         public void StopSearch()
@@ -46,7 +41,7 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.NavigateTo
         public void Dispose()
         {
             this.StopSearch();
-            _displayFactory.Dispose();
+            (_displayFactory as IDisposable)?.Dispose();
         }
 
         public void StartSearch(INavigateToCallback callback, string searchValue)
@@ -90,11 +85,8 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.NavigateTo
 
         private bool GetSearchCurrentDocumentOptionWorker(INavigateToCallback callback)
         {
-            var optionsService = _optionsServices.Length > 0
-                ? VersionSelector.SelectHighest(_optionsServices)
-                : null;
-            var searchCurrentDocument = optionsService?.GetSearchCurrentDocument(callback.Options) ?? false;
-            return searchCurrentDocument;
+            var options2 = callback.Options as INavigateToOptions2;
+            return options2?.SearchCurrentDocument ?? false;
         }
     }
 }

@@ -1,9 +1,8 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.Composition;
-using Microsoft.CodeAnalysis.Editor.Extensibility.Composition;
 using Microsoft.CodeAnalysis.Shared.TestHooks;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Language.NavigateTo.Interfaces;
@@ -13,28 +12,17 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.NavigateTo
     [Export(typeof(INavigateToItemProviderFactory)), Shared]
     internal class NavigateToItemProviderFactory : INavigateToItemProviderFactory
     {
-        private readonly IGlyphService _glyphService;
         private readonly IAsynchronousOperationListener _asyncListener;
-        private readonly IEnumerable<Lazy<INavigateToOptionsService, VisualStudioVersionMetadata>> _optionsServices;
 
         [ImportingConstructor]
         public NavigateToItemProviderFactory(
-            IGlyphService glyphService,
-            [ImportMany] IEnumerable<Lazy<INavigateToOptionsService, VisualStudioVersionMetadata>> optionsServices,
             [ImportMany] IEnumerable<Lazy<IAsynchronousOperationListener, FeatureMetadata>> asyncListeners)
         {
-            if (glyphService == null)
-            {
-                throw new ArgumentNullException(nameof(glyphService));
-            }
-
             if (asyncListeners == null)
             {
                 throw new ArgumentNullException(nameof(asyncListeners));
             }
 
-            _glyphService = glyphService;
-            _optionsServices = optionsServices;
             _asyncListener = new AggregateAsynchronousOperationListener(asyncListeners, FeatureAttribute.NavigateTo);
         }
 
@@ -49,7 +37,7 @@ namespace Microsoft.CodeAnalysis.Editor.Implementation.NavigateTo
                 return false;
             }
 
-            provider = new NavigateToItemProvider(workspace, _glyphService,  _asyncListener, _optionsServices);
+            provider = new NavigateToItemProvider(workspace, _asyncListener);
             return true;
         }
     }

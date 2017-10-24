@@ -9,15 +9,13 @@ Namespace Microsoft.CodeAnalysis.Editor.VisualBasic.UnitTests.DocumentationComme
     Public Class RemoveDocCommentNodeCodeFixProviderTests
         Inherits AbstractVisualBasicDiagnosticProviderBasedUserDiagnosticTest
 
-        Friend Overrides Function CreateDiagnosticProviderAndFixer(workspace As Workspace) As Tuple(Of DiagnosticAnalyzer, CodeFixProvider)
-            Return Tuple.Create(Of DiagnosticAnalyzer, CodeFixProvider)(
-                Nothing,
-                New VisualBasicRemoveDocCommentNodeCodeFixProvider())
+        Friend Overrides Function CreateDiagnosticProviderAndFixer(workspace As Workspace) As (DiagnosticAnalyzer, CodeFixProvider)
+            Return (Nothing, New VisualBasicRemoveDocCommentNodeCodeFixProvider())
         End Function
 
         Private Overloads Async Function TestAsync(ByVal initial As String, ByVal expected As String) As Task
             Dim parseOptions = TestOptions.Regular.WithDocumentationMode(DocumentationMode.Diagnose)
-            Await TestAsync(initial, expected, parseOptions:=parseOptions, compareTokens:=False)
+            Await TestAsync(initial, expected, parseOptions:=parseOptions)
         End Function
         
         <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveDocCommentNode)>
@@ -135,7 +133,61 @@ End Class"
     Sub Fizz(ByVal value As Integer)
     End Sub
 End Class"
-            
+
+            Await TestAsync(initial, expected)
+        End Function
+
+        <WorkItem(13436, "https://github.com/dotnet/roslyn/issues/13436")>
+        <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveDocCommentNode)>
+        Public Async Function RemovesParamTag_BothParamTagsOnSameLine() As Task
+            Dim initial =
+"Class Program
+    ''' <summary>
+    ''' 
+    ''' </summary>
+    ''' [|<param name=""a""></param>|]<param name=""value""></param>
+    Sub Fizz(ByVal value As Integer)
+    End Sub
+End Class"
+
+            Dim expected =
+"Class Program
+    ''' <summary>
+    ''' 
+    ''' </summary>
+    ''' <param name=""value""></param>
+    Sub Fizz(ByVal value As Integer)
+    End Sub
+End Class"
+
+            Await TestAsync(initial, expected)
+        End Function
+
+        <WorkItem(13436, "https://github.com/dotnet/roslyn/issues/13436")>
+        <Fact, Trait(Traits.Feature, Traits.Features.CodeActionsRemoveDocCommentNode)>
+        Public Async Function RemovesParamTag_TrailingText1() As Task
+            Dim initial =
+"Class Program
+    ''' <summary>
+    ''' 
+    ''' </summary>
+    ''' [|<param name=""a""></param>|] a
+    ''' <param name=""value""></param>
+    Sub Fizz(ByVal value As Integer)
+    End Sub
+End Class"
+
+            Dim expected =
+"Class Program
+    ''' <summary>
+    ''' 
+    ''' </summary>
+    '''  a
+    ''' <param name=""value""></param>
+    Sub Fizz(ByVal value As Integer)
+    End Sub
+End Class"
+
             Await TestAsync(initial, expected)
         End Function
 
@@ -364,7 +416,7 @@ End Class"
     ''' 
     ''' </summary>
     ''' [|<returns></returns>|]
-    Declare Sub Foo Lib ""User"" ()
+    Declare Sub Goo Lib ""User"" ()
 End Class"
 
             Dim expected =
@@ -372,7 +424,7 @@ End Class"
     ''' <summary>
     ''' 
     ''' </summary>
-    Declare Sub Foo Lib ""User"" ()
+    Declare Sub Goo Lib ""User"" ()
 End Class"
             
             Await TestAsync(initial, expected)

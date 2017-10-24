@@ -19,7 +19,7 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
     // class via a tool like ResGen or Visual Studio.
     // To add or remove a member, edit your .ResX file then rerun ResGen
     // with the /str option, or rebuild your VS project.
-    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
+    [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "15.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class CSharpVSResources {
@@ -81,9 +81,9 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         /// <summary>
         ///   Looks up a localized string similar to Automatically format _block on }.
         /// </summary>
-        internal static string Automatically_format_block_on {
+        internal static string Automatically_format_block_on_close_brace {
             get {
-                return ResourceManager.GetString("Automatically_format_block_on", resourceCulture);
+                return ResourceManager.GetString("Automatically_format_block_on_close_brace", resourceCulture);
             }
         }
         
@@ -97,11 +97,29 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Automatically format on return.
+        /// </summary>
+        internal static string Automatically_format_on_return {
+            get {
+                return ResourceManager.GetString("Automatically_format_on_return", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Automatically format _statement on ;.
         /// </summary>
-        internal static string Automatically_format_statement_on {
+        internal static string Automatically_format_statement_on_semicolon {
             get {
-                return ResourceManager.GetString("Automatically_format_statement_on", resourceCulture);
+                return ResourceManager.GetString("Automatically_format_statement_on_semicolon", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Automatically format when typing.
+        /// </summary>
+        internal static string Automatically_format_when_typing {
+            get {
+                return ResourceManager.GetString("Automatically_format_when_typing", resourceCulture);
             }
         }
         
@@ -160,15 +178,6 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Enable full solution _analysis.
-        /// </summary>
-        internal static string Enable_full_solution_analysis {
-            get {
-                return ResourceManager.GetString("Enable_full_solution_analysis", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Enter key behavior:.
         /// </summary>
         internal static string Enter_key_behavior_colon {
@@ -192,6 +201,15 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         internal static string Extract_Method {
             get {
                 return ResourceManager.GetString("Extract_Method", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Fade out unused usings.
+        /// </summary>
+        internal static string Fade_out_unused_usings {
+            get {
+                return ResourceManager.GetString("Fade_out_unused_usings", resourceCulture);
             }
         }
         
@@ -291,6 +309,15 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         internal static string Indent_case_contents {
             get {
                 return ResourceManager.GetString("Indent_case_contents", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Indent case contents (when block).
+        /// </summary>
+        internal static string Indent_case_contents_when_block {
+            get {
+                return ResourceManager.GetString("Indent_case_contents_when_block", resourceCulture);
             }
         }
         
@@ -592,6 +619,15 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Never.
+        /// </summary>
+        internal static string Never {
+            get {
+                return ResourceManager.GetString("Never", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to _Never add new line on enter.
         /// </summary>
         internal static string Never_add_new_line_on_enter {
@@ -660,15 +696,6 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         internal static string Optimize_for_solution_size {
             get {
                 return ResourceManager.GetString("Optimize_for_solution_size", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Outlining.
-        /// </summary>
-        internal static string Outlining {
-            get {
-                return ResourceManager.GetString("Outlining", resourceCulture);
             }
         }
         
@@ -799,11 +826,11 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Place open brace on new line for methods.
+        ///   Looks up a localized string similar to Place open brace on new line for methods and local functions.
         /// </summary>
-        internal static string Place_open_brace_on_new_line_for_methods {
+        internal static string Place_open_brace_on_new_line_for_methods_local_functions {
             get {
-                return ResourceManager.GetString("Place_open_brace_on_new_line_for_methods", resourceCulture);
+                return ResourceManager.GetString("Place_open_brace_on_new_line_for_methods_local_functions", resourceCulture);
             }
         }
         
@@ -871,6 +898,15 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Prefer block body.
+        /// </summary>
+        internal static string Prefer_block_body {
+            get {
+                return ResourceManager.GetString("Prefer_block_body", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Prefer conditional delegate call.
         /// </summary>
         internal static string Prefer_conditional_delegate_call {
@@ -885,6 +921,42 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         internal static string Prefer_explicit_type {
             get {
                 return ResourceManager.GetString("Prefer_explicit_type", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Prefer expression body.
+        /// </summary>
+        internal static string Prefer_expression_body {
+            get {
+                return ResourceManager.GetString("Prefer_expression_body", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Prefer &apos;is null&apos; over &apos;object.ReferenceEquals(..., null)&apos;.
+        /// </summary>
+        internal static string Prefer_is_null_over_ReferenceEquals {
+            get {
+                return ResourceManager.GetString("Prefer_is_null_over_ReferenceEquals", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Prefer pattern matching over &apos;as&apos; with &apos;null&apos; check.
+        /// </summary>
+        internal static string Prefer_pattern_matching_over_as_with_null_check {
+            get {
+                return ResourceManager.GetString("Prefer_pattern_matching_over_as_with_null_check", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Prefer pattern matching over &apos;is&apos; with &apos;cast&apos; check.
+        /// </summary>
+        internal static string Prefer_pattern_matching_over_is_with_cast_check {
+            get {
+                return ResourceManager.GetString("Prefer_pattern_matching_over_is_with_cast_check", resourceCulture);
             }
         }
         
@@ -970,11 +1042,29 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Report invalid placeholders in &apos;string.Format&apos; calls.
+        /// </summary>
+        internal static string Report_invalid_placeholders_in_string_dot_format_calls {
+            get {
+                return ResourceManager.GetString("Report_invalid_placeholders_in_string_dot_format_calls", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Selection In Completion List.
         /// </summary>
         internal static string Selection_In_Completion_List {
             get {
                 return ResourceManager.GetString("Selection_In_Completion_List", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Separate using directive groups.
+        /// </summary>
+        internal static string Separate_using_directive_groups {
+            get {
+                return ResourceManager.GetString("Separate_using_directive_groups", resourceCulture);
             }
         }
         
@@ -1056,6 +1146,15 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         internal static string Show_completion_list_after_a_character_is_typed {
             get {
                 return ResourceManager.GetString("Show_completion_list_after_a_character_is_typed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Show name s_uggestions.
+        /// </summary>
+        internal static string Show_name_suggestions {
+            get {
+                return ResourceManager.GetString("Show_name_suggestions", resourceCulture);
             }
         }
         
@@ -1173,6 +1272,24 @@ namespace Microsoft.VisualStudio.LanguageServices.CSharp {
         internal static string var_preferences_colon {
             get {
                 return ResourceManager.GetString("var_preferences_colon", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to When on single line.
+        /// </summary>
+        internal static string When_on_single_line {
+            get {
+                return ResourceManager.GetString("When_on_single_line", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to When possible.
+        /// </summary>
+        internal static string When_possible {
+            get {
+                return ResourceManager.GetString("When_possible", resourceCulture);
             }
         }
         

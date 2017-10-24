@@ -6,6 +6,7 @@ Imports System.Collections.Immutable
 Imports System.Diagnostics
 Imports System.Linq
 Imports System.Text
+Imports Microsoft.CodeAnalysis.PooledObjects
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
@@ -1373,6 +1374,14 @@ lUnsplitAndFinish:
         Public Overrides Function VisitConversion(node As BoundConversion) As BoundNode
             VisitRvalue(node.Operand)
             Return Nothing
+        End Function
+
+        Public Overrides Function VisitRelaxationLambda(node As BoundRelaxationLambda) As BoundNode
+            Throw ExceptionUtilities.Unreachable
+        End Function
+
+        Public Overrides Function VisitConvertedTupleElements(node As BoundConvertedTupleElements) As BoundNode
+            Throw ExceptionUtilities.Unreachable
         End Function
 
         Public Overrides Function VisitUserDefinedConversion(node As BoundUserDefinedConversion) As BoundNode

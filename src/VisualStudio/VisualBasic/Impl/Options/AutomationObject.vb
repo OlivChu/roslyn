@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Runtime.InteropServices
 Imports System.Xml.Linq
@@ -10,13 +10,14 @@ Imports Microsoft.CodeAnalysis.ExtractMethod
 Imports Microsoft.CodeAnalysis.Options
 Imports Microsoft.CodeAnalysis.Shared.Options
 Imports Microsoft.CodeAnalysis.Simplification
+Imports Microsoft.CodeAnalysis.SymbolSearch
 
 Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Options
     <ComVisible(True)>
     Public Class AutomationObject
-        Private ReadOnly _workspace As Workspace
+        Private ReadOnly _workspace As CodeAnalysis.Workspace
 
-        Friend Sub New(workspace As Workspace)
+        Friend Sub New(workspace As CodeAnalysis.Workspace)
             _workspace = workspace
         End Sub
 
@@ -142,7 +143,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Options
             End Set
         End Property
 
-        Public Property Style_PreferIntrinsicPredefinedTypeKeywordInDeclaration As String
+        Public Property Style_PreferIntrinsicPredefinedTypeKeywordInDeclaration_CodeStyle As String
             Get
                 Return GetXmlOption(CodeStyleOptions.PreferIntrinsicPredefinedTypeKeywordInDeclaration)
             End Get
@@ -151,7 +152,7 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Options
             End Set
         End Property
 
-        Public Property Style_PreferIntrinsicPredefinedTypeKeywordInMemberAccess As String
+        Public Property Style_PreferIntrinsicPredefinedTypeKeywordInMemberAccess_CodeStyle As String
             Get
                 Return GetXmlOption(CodeStyleOptions.PreferIntrinsicPredefinedTypeKeywordInMemberAccess)
             End Get
@@ -196,6 +197,70 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Options
             End Set
         End Property
 
+
+        Public Property Style_PreferThrowExpression As String
+            Get
+                Return GetXmlOption(CodeStyleOptions.PreferThrowExpression)
+            End Get
+            Set(value As String)
+                SetXmlOption(CodeStyleOptions.PreferThrowExpression, value)
+            End Set
+        End Property
+
+        Public Property Style_PreferObjectInitializer As String
+            Get
+                Return GetXmlOption(CodeStyleOptions.PreferObjectInitializer)
+            End Get
+            Set(value As String)
+                SetXmlOption(CodeStyleOptions.PreferObjectInitializer, value)
+            End Set
+        End Property
+
+        Public Property Style_PreferCollectionInitializer As String
+            Get
+                Return GetXmlOption(CodeStyleOptions.PreferCollectionInitializer)
+            End Get
+            Set(value As String)
+                SetXmlOption(CodeStyleOptions.PreferCollectionInitializer, value)
+            End Set
+        End Property
+
+        Public Property Style_PreferCoalesceExpression As String
+            Get
+                Return GetXmlOption(CodeStyleOptions.PreferCoalesceExpression)
+            End Get
+            Set(value As String)
+                SetXmlOption(CodeStyleOptions.PreferCoalesceExpression, value)
+            End Set
+        End Property
+
+        Public Property Style_PreferNullPropagation As String
+            Get
+                Return GetXmlOption(CodeStyleOptions.PreferNullPropagation)
+            End Get
+            Set(value As String)
+                SetXmlOption(CodeStyleOptions.PreferNullPropagation, value)
+            End Set
+        End Property
+
+        Public Property Style_PreferInlinedVariableDeclaration As String
+            Get
+                Return GetXmlOption(CodeStyleOptions.PreferInlinedVariableDeclaration)
+            End Get
+            Set(value As String)
+                SetXmlOption(CodeStyleOptions.PreferInlinedVariableDeclaration, value)
+            End Set
+        End Property
+
+        Public Property Style_PreferExplicitTupleNames As String
+            Get
+                Return GetXmlOption(CodeStyleOptions.PreferExplicitTupleNames)
+            End Get
+            Set(value As String)
+                SetXmlOption(CodeStyleOptions.PreferExplicitTupleNames, value)
+            End Set
+        End Property
+
         Public Property Option_PlaceSystemNamespaceFirst As Boolean
             Get
                 Return GetBooleanOption(GenerationOptions.PlaceSystemNamespaceFirst)
@@ -207,19 +272,19 @@ Namespace Microsoft.VisualStudio.LanguageServices.VisualBasic.Options
 
         Public Property Option_SuggestImportsForTypesInReferenceAssemblies As Boolean
             Get
-                Return GetBooleanOption(AddImportOptions.SuggestForTypesInReferenceAssemblies)
+                Return GetBooleanOption(SymbolSearchOptions.SuggestForTypesInReferenceAssemblies)
             End Get
             Set(value As Boolean)
-                SetBooleanOption(AddImportOptions.SuggestForTypesInReferenceAssemblies, value)
+                SetBooleanOption(SymbolSearchOptions.SuggestForTypesInReferenceAssemblies, value)
             End Set
         End Property
 
         Public Property Option_SuggestImportsForTypesInNuGetPackages As Boolean
             Get
-                Return GetBooleanOption(AddImportOptions.SuggestForTypesInNuGetPackages)
+                Return GetBooleanOption(SymbolSearchOptions.SuggestForTypesInNuGetPackages)
             End Get
             Set(value As Boolean)
-                SetBooleanOption(AddImportOptions.SuggestForTypesInNuGetPackages, value)
+                SetBooleanOption(SymbolSearchOptions.SuggestForTypesInNuGetPackages, value)
             End Set
         End Property
 

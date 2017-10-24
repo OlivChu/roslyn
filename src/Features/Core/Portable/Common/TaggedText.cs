@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis.Classification;
+using Microsoft.CodeAnalysis.Collections;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Text;
 using Roslyn.Utilities;
 
@@ -32,18 +34,8 @@ namespace Microsoft.CodeAnalysis
         /// <param name="text">The actual text to be displayed.</param>
         public TaggedText(string tag, string text)
         {
-            if (tag == null)
-            {
-                throw new ArgumentNullException(nameof(tag));
-            }
-
-            if (text == null)
-            {
-                throw new ArgumentNullException(nameof(text));
-            }
-
-            Tag = tag;
-            Text = text;
+            Tag = tag ?? throw new ArgumentNullException(nameof(tag));
+            Text = text ?? throw new ArgumentNullException(nameof(text));
         }
 
         public override string ToString()
@@ -67,9 +59,22 @@ namespace Microsoft.CodeAnalysis
 
         public static string JoinText(this ImmutableArray<TaggedText> values)
         {
+            
             return values.IsDefault
                 ? null
-                : string.Join("", values.Select(t => t.Text));
+                : Join(values);
+        }
+
+        private static string Join(ImmutableArray<TaggedText> values)
+        {
+            var pooled = PooledStringBuilder.GetInstance();
+            var builder = pooled.Builder;
+            foreach (var val in values)
+            {
+                builder.Append(val.Text);
+            }
+
+            return pooled.ToStringAndFree();
         }
 
         public static string ToClassificationTypeName(this string taggedTextTag)
@@ -135,7 +140,7 @@ namespace Microsoft.CodeAnalysis
                     return ClassificationTypeNames.Text;
 
                 default:
-                    throw ExceptionUtilities.Unreachable;
+                    throw ExceptionUtilities.UnexpectedValue(taggedTextTag);
             }
         }
 

@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.CSharp.Structure;
@@ -17,7 +17,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Structure
         public async Task BrokenRegion()
         {
             const string code = @"
-$$#region Foo";
+$$#region Goo";
 
             await VerifyNoBlockSpansAsync(code);
         }
@@ -26,11 +26,11 @@ $$#region Foo";
         public async Task SimpleRegion()
         {
             const string code = @"
-{|span:$$#region Foo
+{|span:$$#region Goo
 #endregion|}";
 
             await VerifyBlockSpansAsync(code,
-                Region("span", "Foo", autoCollapse: true, isDefaultCollapsed: true));
+                Region("span", "Goo", autoCollapse: false, isDefaultCollapsed: true));
         }
 
         [WorkItem(539361, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/539361")]
@@ -66,7 +66,7 @@ namespace BasicGenerateFromUsage
 }";
 
             await VerifyBlockSpansAsync(code,
-                Region("span", "TaoRegion", autoCollapse: true, isDefaultCollapsed: true));
+                Region("span", "TaoRegion", autoCollapse: false, isDefaultCollapsed: true));
         }
 
         [WorkItem(953668, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/953668")]
@@ -84,7 +84,7 @@ class C
 }";
 
             await VerifyBlockSpansAsync(code,
-                Region("span", "Region", autoCollapse: true, isDefaultCollapsed: true));
+                Region("span", "Region", autoCollapse: false, isDefaultCollapsed: true));
         }
 
         [WorkItem(4105, "https://github.com/dotnet/roslyn/issues/4105")]
@@ -102,7 +102,7 @@ class C
 }";
 
             await VerifyBlockSpansAsync(code,
-                Region("span", "Region", autoCollapse: true, isDefaultCollapsed: true));
+                Region("span", "Region", autoCollapse: false, isDefaultCollapsed: true));
         }
     }
 }

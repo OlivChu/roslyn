@@ -1,5 +1,5 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
-#pragma warning disable RS0007 // Avoid zero-length array allocations.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+#pragma warning disable CA1825 // Avoid zero-length array allocations.
 
 using System;
 using System.Collections.ObjectModel;
@@ -127,7 +127,7 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
             Debug.Assert(index >= numRows);
             Debug.Assert(initialRequestSize >= numRows);
             var initialChildren = new DkmEvaluationResult[numRows];
-            CompletionRoutine<Exception> onException = e => completionRoutine(DkmGetChildrenAsyncResult.CreateErrorResult(e));
+            void onException(Exception e) => completionRoutine(DkmGetChildrenAsyncResult.CreateErrorResult(e));
             var wl = new WorkList(workList, onException);
             wl.ContinueWith(() =>
                 GetEvaluationResultsAndContinue(evaluationResult, rows, initialChildren, 0, numRows, wl, inspectionContext,
@@ -169,7 +169,7 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
             var numRows = rows.Count;
             Debug.Assert(count >= numRows);
             var results = new DkmEvaluationResult[numRows];
-            CompletionRoutine<Exception> onException = e => completionRoutine(DkmEvaluationEnumAsyncResult.CreateErrorResult(e));
+            void onException(Exception e) => completionRoutine(DkmEvaluationEnumAsyncResult.CreateErrorResult(e));
             var wl = new WorkList(workList, onException);
             wl.ContinueWith(() =>
                 GetEvaluationResultsAndContinue(evaluationResult, rows, results, 0, numRows, wl, inspectionContext,
@@ -240,6 +240,25 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
         {
             switch (result.Kind)
             {
+                case ExpansionKind.Explicit:
+                    completionRoutine(DkmSuccessEvaluationResult.Create(
+                        inspectionContext,
+                        stackFrame,
+                        Name: result.DisplayName,
+                        FullName: result.FullName,
+                        Flags: result.Flags,
+                        Value: result.DisplayValue,
+                        EditableValue: result.EditableValue,
+                        Type: result.DisplayType,
+                        Category: DkmEvaluationResultCategory.Data,
+                        Access: DkmEvaluationResultAccessType.None,
+                        StorageType: DkmEvaluationResultStorageType.None,
+                        TypeModifierFlags: DkmEvaluationResultTypeModifierFlags.None,
+                        Address: result.Value.Address,
+                        CustomUIVisualizers: null,
+                        ExternalModules: null,
+                        DataItem: result.ToDataItem()));
+                    break;
                 case ExpansionKind.Error:
                     completionRoutine(DkmFailedEvaluationResult.Create(
                         inspectionContext,
@@ -465,14 +484,19 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
         /// The qualified name (i.e. including containing types and namespaces) of a named, pointer,
         /// or array type followed by the qualified name of the actual runtime type, if provided.
         /// </returns>
-        private static string GetTypeName(DkmInspectionContext inspectionContext, DkmClrValue value, DkmClrType declaredType, DkmClrCustomTypeInfo declaredTypeInfo, ExpansionKind kind)
+        internal static string GetTypeName(
+            DkmInspectionContext inspectionContext,
+            DkmClrValue value,
+            DkmClrType declaredType,
+            DkmClrCustomTypeInfo declaredTypeInfo,
+            bool isPointerDereference)
         {
             var declaredLmrType = declaredType.GetLmrType();
             var runtimeType = value.Type;
             var declaredTypeName = inspectionContext.GetTypeName(declaredType, declaredTypeInfo, Formatter.NoFormatSpecifiers);
             // Include the runtime type if distinct.
             if (!declaredLmrType.IsPointer &&
-                (kind != ExpansionKind.PointerDereference) &&
+                !isPointerDereference &&
                 (!declaredLmrType.IsNullable() || value.EvalFlags.Includes(DkmEvaluationResultFlags.ExceptionThrown)))
             {
                 // Generate the declared type name without tuple element names.
@@ -736,8 +760,7 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
             {
                 var targetType = displayInfo.TargetType;
                 var attribute = displayInfo.Attribute;
-                CompletionRoutine<Exception> onException =
-                    e => completionRoutine(CreateEvaluationResultFromException(e, result, inspectionContext));
+                void onException(Exception e) => completionRoutine(CreateEvaluationResultFromException(e, result, inspectionContext));
 
                 var innerWorkList = workList.InnerWorkList;
                 EvaluateDebuggerDisplayStringAndContinue(value, innerWorkList, inspectionContext, targetType, attribute.Name,
@@ -765,18 +788,17 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
             CompletionRoutine<DkmEvaluateDebuggerDisplayStringAsyncResult> onCompleted,
             CompletionRoutine<Exception> onException)
         {
-            DkmCompletionRoutine<DkmEvaluateDebuggerDisplayStringAsyncResult> completionRoutine =
-                result =>
+            void completionRoutine(DkmEvaluateDebuggerDisplayStringAsyncResult result)
+            {
+                try
                 {
-                    try
-                    {
-                        onCompleted(result);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
-                };
+                    onCompleted(result);
+                }
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+            }
             if (str == null)
             {
                 completionRoutine(default(DkmEvaluateDebuggerDisplayStringAsyncResult));
@@ -831,7 +853,7 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
                 display = value.GetValueString(inspectionContext, Formatter.NoFormatSpecifiers);
             }
 
-            var typeName = displayType ?? GetTypeName(inspectionContext, value, declaredType, declaredTypeInfo, result.Kind);
+            var typeName = displayType ?? GetTypeName(inspectionContext, value, declaredType, declaredTypeInfo, result.Kind == ExpansionKind.PointerDereference);
 
             return CreateEvaluationResult(inspectionContext, value, name, typeName, display, result);
         }
@@ -847,19 +869,18 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
             CompletionRoutine onCompleted,
             CompletionRoutine<Exception> onException)
         {
-            DkmCompletionRoutine<DkmEvaluationAsyncResult> completionRoutine =
-                result =>
+            void completionRoutine(DkmEvaluationAsyncResult result)
+            {
+                try
                 {
-                    try
-                    {
-                        results[index] = result.Result;
-                        GetEvaluationResultsAndContinue(parent, rows, results, index + 1, numRows, workList, inspectionContext, onCompleted, onException);
-                    }
-                    catch (Exception e)
-                    {
-                        onException(e);
-                    }
-                };
+                    results[index] = result.Result;
+                    GetEvaluationResultsAndContinue(parent, rows, results, index + 1, numRows, workList, inspectionContext, onCompleted, onException);
+                }
+                catch (Exception e)
+                {
+                    onException(e);
+                }
+            }
             if (index < numRows)
             {
                 GetChild(
@@ -951,10 +972,10 @@ namespace Microsoft.CodeAnalysis.ExpressionEvaluator
             int cardinality;
             if (runtimeType.IsTupleCompatible(out cardinality))
             {
-                return TupleExpansion.CreateExpansion(value, declaredTypeAndInfo, cardinality);
+                return TupleExpansion.CreateExpansion(inspectionContext, declaredTypeAndInfo, value, cardinality);
             }
 
-            return MemberExpansion.CreateExpansion(inspectionContext, declaredTypeAndInfo, value, flags, TypeHelpers.IsVisibleMember, this);
+            return MemberExpansion.CreateExpansion(inspectionContext, declaredTypeAndInfo, value, flags, TypeHelpers.IsVisibleMember, this, isProxyType: false);
         }
 
         private static DkmEvaluationResult CreateEvaluationResultFromException(Exception e, EvalResult result, DkmInspectionContext inspectionContext)

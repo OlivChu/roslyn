@@ -2,28 +2,24 @@
 
 using System;
 using System.IO;
-using StreamJsonRpc;
 
 namespace Microsoft.CodeAnalysis.Remote
 {
     /// <summary>
     /// Snapshot service in service hub side.
     /// 
-    /// this service will be used to move over snapshot data from client to service hub
+    /// this service will be used to move over remotable data from client to service hub
     /// </summary>
     internal partial class SnapshotService : ServiceHubServiceBase
     {
         private readonly AssetSource _source;
 
         public SnapshotService(Stream stream, IServiceProvider serviceProvider) :
-            base(stream, serviceProvider)
+            base(serviceProvider, stream)
         {
-            _source = new JsonRpcAssetSource(Rpc, Logger, CancellationToken);
-        }
+            _source = new JsonRpcAssetSource(this);
 
-        protected override void OnDisconnected(JsonRpcDisconnectedEventArgs e)
-        {
-            _source.Done();
+            Rpc.StartListening();
         }
     }
 }

@@ -1,4 +1,4 @@
-' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 Imports System.Threading
 Imports Microsoft.CodeAnalysis
@@ -19,7 +19,8 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.SignatureHelp
                                                    normalType As INamedTypeSymbol,
                                                    within As ISymbol,
                                                    cancellationToken As CancellationToken) As IList(Of SignatureHelpItem)
-            Dim accessibleConstructors = normalType.InstanceConstructors.Where(Function(c) c.IsAccessibleWithin(within)).
+            Dim accessibleConstructors = normalType.InstanceConstructors.
+                                                    WhereAsArray(Function(c) c.IsAccessibleWithin(within)).
                                                     FilterToVisibleAndBrowsableSymbolsAndNotUnsafeSymbols(document.ShouldHideAdvancedMembers(), semanticModel.Compilation).
                                                     Sort(symbolDisplayService, semanticModel, objectCreationExpression.SpanStart)
 

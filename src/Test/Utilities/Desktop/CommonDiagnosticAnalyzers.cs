@@ -385,6 +385,24 @@ namespace Microsoft.CodeAnalysis
         }
 
         [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
+        public sealed class AnalyzerWithDisabledRules : DiagnosticAnalyzer
+        {
+            public static readonly DiagnosticDescriptor Rule = new DiagnosticDescriptor(
+                "ID1",
+                "Title1",
+                "Message1",
+                "Category1",
+                defaultSeverity: DiagnosticSeverity.Warning,
+                isEnabledByDefault: false);
+
+            public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
+            public override void Initialize(AnalysisContext context)
+            {
+                context.RegisterSymbolAction(_ => { }, SymbolKind.NamedType);
+            }
+        }
+
+        [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
         public sealed class EnsureNoMergedNamespaceSymbolAnalyzer : DiagnosticAnalyzer
         {
             public const string DiagnosticId = nameof(DiagnosticId);
@@ -440,6 +458,25 @@ namespace Microsoft.CodeAnalysis
                 context.RegisterCompilationAction(compilationContext =>
                     compilationContext.ReportDiagnostic(Diagnostic.Create(Descriptor, Location.None)));
             }
+        }
+
+        [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
+        public sealed class AnalyzerWithInvalidDiagnosticSpan : DiagnosticAnalyzer
+        {
+            private readonly TextSpan _badSpan;
+
+            public static readonly DiagnosticDescriptor Descriptor = new DiagnosticDescriptor(
+                "ID",
+                "Title1",
+                "Message",
+                "Category1",
+                defaultSeverity: DiagnosticSeverity.Warning,
+                isEnabledByDefault: true);
+
+            public AnalyzerWithInvalidDiagnosticSpan(TextSpan badSpan) => _badSpan = badSpan;
+            public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Descriptor);
+            public override void Initialize(AnalysisContext context)
+                => context.RegisterSyntaxTreeAction(c => c.ReportDiagnostic(Diagnostic.Create(Descriptor, SourceLocation.Create(c.Tree, _badSpan))));
         }
 
         [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
@@ -714,7 +751,7 @@ namespace Microsoft.CodeAnalysis
 
         /// <summary>
         /// This analyzer will report diagnostics only if it receives any concurrent action callbacks, which would be a
-        /// bug in the analyzer driver as this analyzer doesn't invoke <see cref="AnalysisContext.RegisterConcurrentExecution"/>.
+        /// bug in the analyzer driver as this analyzer doesn't invoke <see cref="AnalysisContext.EnableConcurrentExecution"/>.
         /// </summary>
         [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
         public class NonConcurrentAnalyzer : DiagnosticAnalyzer
@@ -1027,8 +1064,7 @@ namespace Microsoft.CodeAnalysis
                     var descriptor = GeneratedCodeDescriptor;
                     foreach (var location in symbolContext.Symbol.Locations)
                     {
-                        bool isGeneratedCode;
-                        context.TryGetValue(location.SourceTree, _treeValueProvider, out isGeneratedCode);
+                        context.TryGetValue(location.SourceTree, _treeValueProvider, out var isGeneratedCode);
                         if (!isGeneratedCode)
                         {
                             descriptor = NonGeneratedCodeDescriptor;
@@ -1042,15 +1078,13 @@ namespace Microsoft.CodeAnalysis
 
                 context.RegisterSyntaxTreeAction(treeContext =>
                 {
-                    bool isGeneratedCode;
-                    context.TryGetValue(treeContext.Tree, _treeValueProvider, out isGeneratedCode);
+                    context.TryGetValue(treeContext.Tree, _treeValueProvider, out var isGeneratedCode);
                     var descriptor = isGeneratedCode ? GeneratedCodeDescriptor : NonGeneratedCodeDescriptor;
 
                     var diagnostic = Diagnostic.Create(descriptor, Location.None, treeContext.Tree.FilePath);
                     treeContext.ReportDiagnostic(diagnostic);
 
-                    int length;
-                    context.TryGetValue(treeContext.Tree.GetText(), _textValueProvider, out length);
+                    context.TryGetValue(treeContext.Tree.GetText(), _textValueProvider, out var length);
                     diagnostic = Diagnostic.Create(UniqueTextFileDescriptor, Location.None, treeContext.Tree.FilePath);
                     treeContext.ReportDiagnostic(diagnostic);
                 });
@@ -1065,6 +1099,30 @@ namespace Microsoft.CodeAnalysis
                     var diagnostic = Diagnostic.Create(NumberOfUniqueTextFileDescriptor, Location.None, _textCallbackSet.Count);
                     endContext.ReportDiagnostic(diagnostic);
                 });
+            }
+        }
+
+        [DiagnosticAnalyzer(LanguageNames.CSharp, LanguageNames.VisualBasic)]
+        public class AnalyzerForParameters : DiagnosticAnalyzer
+        {
+            public static readonly DiagnosticDescriptor ParameterDescriptor = new DiagnosticDescriptor(
+                "Parameter_ID",
+                "Parameter_Title",
+                "Parameter_Message",
+                "Parameter_Category",
+                defaultSeverity: DiagnosticSeverity.Warning,
+                isEnabledByDefault: true);
+
+            public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(ParameterDescriptor);
+
+            public override void Initialize(AnalysisContext context)
+            {
+                context.RegisterSymbolAction(SymbolAction, SymbolKind.Parameter);
+            }
+
+            private void SymbolAction(SymbolAnalysisContext context)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(ParameterDescriptor, context.Symbol.Locations[0]));
             }
         }
     }

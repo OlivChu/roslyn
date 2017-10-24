@@ -11,9 +11,6 @@ namespace Microsoft.CodeAnalysis.DocumentationComments
 {
     internal abstract class AbstractDocumentationCommentFormattingService : IDocumentationCommentFormattingService
     {
-        private int _position;
-        private SemanticModel _semanticModel;
-
         private class FormatterState
         {
             private bool _anyNonWhitespaceSinceLastPara;
@@ -216,6 +213,7 @@ namespace Microsoft.CodeAnalysis.DocumentationComments
                 var symbol = DocumentationCommentId.GetFirstSymbolForDeclarationId(crefValue, semanticModel.Compilation);
                 if (symbol != null)
                 {
+                    format = format ?? SymbolDisplayFormat.MinimallyQualifiedFormat;
                     if (symbol.IsConstructor())
                     {
                         format = format.WithMemberOptions(SymbolDisplayMemberOptions.IncludeParameters | SymbolDisplayMemberOptions.IncludeExplicitInterface);

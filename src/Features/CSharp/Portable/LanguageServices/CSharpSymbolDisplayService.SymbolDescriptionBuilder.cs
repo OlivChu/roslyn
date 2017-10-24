@@ -1,7 +1,6 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-using System.Collections.Generic;
-using System.Linq;
+using System.Collections.Immutable;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CodeAnalysis.Classification;
@@ -18,6 +17,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.LanguageServices
         protected class SymbolDescriptionBuilder : AbstractSymbolDescriptionBuilder
         {
             private static readonly SymbolDisplayFormat s_minimallyQualifiedFormat = SymbolDisplayFormat.MinimallyQualifiedFormat
+                .AddLocalOptions(SymbolDisplayLocalOptions.IncludeRef)
                 .AddMiscellaneousOptions(SymbolDisplayMiscellaneousOptions.UseErrorTypeSymbolName)
                 .RemoveParameterOptions(SymbolDisplayParameterOptions.IncludeDefaultValue)
                 .WithKindOptions(SymbolDisplayKindOptions.None);
@@ -74,27 +74,27 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.LanguageServices
                     Space());
             }
 
-            protected override Task<IEnumerable<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
+            protected override Task<ImmutableArray<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
                 ISymbol symbol)
             {
                 // Actually check for C# symbol types here.  
-                if (symbol is IParameterSymbol)
+                if (symbol is IParameterSymbol parameter)
                 {
-                    return GetInitializerSourcePartsAsync((IParameterSymbol)symbol);
+                    return GetInitializerSourcePartsAsync(parameter);
                 }
-                else if (symbol is ILocalSymbol)
+                else if (symbol is ILocalSymbol local)
                 {
-                    return GetInitializerSourcePartsAsync((ILocalSymbol)symbol);
+                    return GetInitializerSourcePartsAsync(local);
                 }
-                else if (symbol is IFieldSymbol)
+                else if (symbol is IFieldSymbol field)
                 {
-                    return GetInitializerSourcePartsAsync((IFieldSymbol)symbol);
+                    return GetInitializerSourcePartsAsync(field);
                 }
 
-                return SpecializedTasks.Default<IEnumerable<SymbolDisplayPart>>();
+                return SpecializedTasks.EmptyImmutableArray<SymbolDisplayPart>();
             }
 
-            private async Task<IEnumerable<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
+            private async Task<ImmutableArray<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
                 IFieldSymbol symbol)
             {
                 EqualsValueClauseSyntax initializer = null;
@@ -119,10 +119,10 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.LanguageServices
                     return await GetInitializerSourcePartsAsync(initializer).ConfigureAwait(false);
                 }
 
-                return null;
+                return ImmutableArray<SymbolDisplayPart>.Empty;
             }
 
-            private async Task<IEnumerable<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
+            private async Task<ImmutableArray<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
                 ILocalSymbol symbol)
             {
                 var syntax = await this.GetFirstDeclaration<VariableDeclaratorSyntax>(symbol).ConfigureAwait(false);
@@ -131,10 +131,10 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.LanguageServices
                     return await GetInitializerSourcePartsAsync(syntax.Initializer).ConfigureAwait(false);
                 }
 
-                return null;
+                return ImmutableArray<SymbolDisplayPart>.Empty;
             }
 
-            private async Task<IEnumerable<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
+            private async Task<ImmutableArray<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
                 IParameterSymbol symbol)
             {
                 var syntax = await this.GetFirstDeclaration<ParameterSyntax>(symbol).ConfigureAwait(false);
@@ -143,7 +143,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.LanguageServices
                     return await GetInitializerSourcePartsAsync(syntax.Default).ConfigureAwait(false);
                 }
 
-                return null;
+                return ImmutableArray<SymbolDisplayPart>.Empty;
             }
 
             private async Task<T> GetFirstDeclaration<T>(ISymbol symbol) where T : SyntaxNode
@@ -151,16 +151,16 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.LanguageServices
                 foreach (var syntaxRef in symbol.DeclaringSyntaxReferences)
                 {
                     var syntax = await syntaxRef.GetSyntaxAsync(this.CancellationToken).ConfigureAwait(false);
-                    if (syntax is T)
+                    if (syntax is T tSyntax)
                     {
-                        return (T)syntax;
+                        return tSyntax;
                     }
                 }
 
                 return null;
             }
 
-            private async Task<IEnumerable<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
+            private async Task<ImmutableArray<SymbolDisplayPart>> GetInitializerSourcePartsAsync(
                 EqualsValueClauseSyntax equalsValue)
             {
                 if (equalsValue != null && equalsValue.Value != null)
@@ -174,7 +174,7 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.LanguageServices
                     }
                 }
 
-                return null;
+                return ImmutableArray<SymbolDisplayPart>.Empty;
             }
 
             protected override void AddAwaitableUsageText(IMethodSymbol method, SemanticModel semanticModel, int position)
@@ -183,15 +183,9 @@ namespace Microsoft.CodeAnalysis.Editor.CSharp.LanguageServices
                     method.ToAwaitableParts(SyntaxFacts.GetText(SyntaxKind.AwaitKeyword), "x", semanticModel, position));
             }
 
-            protected override SymbolDisplayFormat MinimallyQualifiedFormat
-            {
-                get { return s_minimallyQualifiedFormat; }
-            }
+            protected override SymbolDisplayFormat MinimallyQualifiedFormat => s_minimallyQualifiedFormat;
 
-            protected override SymbolDisplayFormat MinimallyQualifiedFormatWithConstants
-            {
-                get { return s_minimallyQualifiedFormatWithConstants; }
-            }
+            protected override SymbolDisplayFormat MinimallyQualifiedFormatWithConstants => s_minimallyQualifiedFormatWithConstants;
         }
     }
 }

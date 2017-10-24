@@ -62,11 +62,8 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Syntax.InternalSyntax
             ' // enabled), and it isn't possible to look back past the first token of a
             ' // line, so test if this is the first token of the last read line.
 
-            ' // (bug 32704) "else" is a special case in the construct "if foo then resume else statement"
-
             ' REM and XmlDocComment are now trivia so they have been removed from the test
-            Return SyntaxFacts.IsTerminator(t.Kind) OrElse
-                (Context.IsLineIf AndAlso t.Kind = SyntaxKind.ElseKeyword)
+            Return SyntaxFacts.IsTerminator(t.Kind)
         End Function
 
         ' // Parser::CanFollowStatement -- Can this token follow a complete statement?
@@ -142,8 +139,8 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Syntax.InternalSyntax
                     Return True
                 ElseIf allowGenericsWithoutOf Then
                     ' // To enable a better user experience in some common generics'
-                    ' // error scenarios, we special case foo(Integer) and
-                    ' // foo(Integer, garbage).
+                    ' // error scenarios, we special case goo(Integer) and
+                    ' // goo(Integer, garbage).
                     ' //
                     ' // "(Integer" indicates possibly type parameters with missing "of",
                     ' // but not "(Integer." and "Integer!" because they could possibly

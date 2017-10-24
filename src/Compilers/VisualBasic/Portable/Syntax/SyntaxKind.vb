@@ -3185,9 +3185,19 @@ Namespace Microsoft.CodeAnalysis.VisualBasic
         TupleType = 789
 
         ''' <summary>
-        ''' Represents an element of a tuple type.
+        ''' Represents an element of a tuple type supplying only the type
         ''' </summary>
-        TupleElement = 790
-    End Enum
+        TypedTupleElement = 790
 
+        ''' <summary>
+        ''' Represents an element of a tuple type supplying element name and optionally a type.
+        ''' </summary>
+        NamedTupleElement = 791
+
+        ''' <summary>
+        ''' Trivia created when merge conflict markers (like "&lt;&lt;&lt;&lt;&lt;&lt;&lt;") are detected in source code
+        ''' </summary>
+        ConflictMarkerTrivia = 792
+
+    End Enum
 End Namespace

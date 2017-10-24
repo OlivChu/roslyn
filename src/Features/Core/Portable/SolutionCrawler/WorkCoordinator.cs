@@ -1,4 +1,4 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
@@ -46,7 +46,6 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
 
                 _listener = listener;
                 _optionService = _registration.GetService<IOptionService>();
-                _optionService.OptionChanged += OnOptionChanged;
 
                 // event and worker queues
                 _shutdownNotificationSource = new CancellationTokenSource();
@@ -74,11 +73,22 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     _registration.Workspace.DocumentOpened += OnDocumentOpened;
                     _registration.Workspace.DocumentClosed += OnDocumentClosed;
                 }
+
+                // subscribe to option changed event after all required fields are set
+                // otherwise, we can get null exception when running OnOptionChanged handler
+                _optionService.OptionChanged += OnOptionChanged;
             }
 
-            public int CorrelationId
+            public int CorrelationId => _registration.CorrelationId;
+
+            public void AddAnalyzer(IIncrementalAnalyzer analyzer, bool highPriorityForActiveFile)
             {
-                get { return _registration.CorrelationId; }
+                // add analyzer
+                _documentAndProjectWorkerProcessor.AddAnalyzer(analyzer, highPriorityForActiveFile);
+
+                // and ask to re-analyze whole solution for the given analyzer
+                var set = _registration.CurrentSolution.Projects.SelectMany(p => p.DocumentIds).ToSet();
+                Reanalyze(analyzer, set);
             }
 
             public void Shutdown(bool blockingShutdown)
@@ -136,12 +146,6 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     return;
                 }
 
-                // Changing the UseV2Engine option is a no-op as we have a single engine now.
-                if (e.Option == Diagnostics.InternalDiagnosticsOptions.UseDiagnosticEngineV2)
-                {
-                    _documentAndProjectWorkerProcessor.ChangeDiagnosticsEngine((bool)e.Value);
-                }
-
                 ReanalyzeOnOptionChange(sender, e);
             }
 
@@ -159,13 +163,18 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                 }
             }
 
-            public void Reanalyze(IIncrementalAnalyzer analyzer, IEnumerable<DocumentId> documentIds, bool highPriority = false)
+            public void Reanalyze(IIncrementalAnalyzer analyzer, ISet<DocumentId> documentIds, bool highPriority = false)
             {
                 var asyncToken = _listener.BeginAsyncOperation("Reanalyze");
                 _eventProcessingQueue.ScheduleTask(
                     () => EnqueueWorkItemAsync(analyzer, documentIds, highPriority), _shutdownToken).CompletesAsyncOperation(asyncToken);
 
-                SolutionCrawlerLogger.LogReanalyze(CorrelationId, analyzer, documentIds, highPriority);
+                if (documentIds?.Count > 1)
+                {
+                    // log big reanalysis request from things like fix all, suppress all or option changes
+                    // we are not interested in 1 file re-analysis request which can happen from like venus typing
+                    SolutionCrawlerLogger.LogReanalyze(CorrelationId, analyzer, documentIds, highPriority);
+                }
             }
 
             private void OnWorkspaceChanged(object sender, WorkspaceChangeEventArgs args)
@@ -236,7 +245,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                         ProcessDocumentEvent(args, asyncToken);
                         break;
                     default:
-                        throw ExceptionUtilities.Unreachable;
+                        throw ExceptionUtilities.UnexpectedValue(args.Kind);
                 }
             }
 
@@ -278,7 +287,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                         break;
 
                     default:
-                        throw ExceptionUtilities.Unreachable;
+                        throw ExceptionUtilities.UnexpectedValue(e.Kind);
                 }
             }
 
@@ -287,7 +296,6 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                 switch (e.Kind)
                 {
                     case WorkspaceChangeKind.ProjectAdded:
-                        OnProjectAdded(e.NewSolution.GetProject(e.ProjectId));
                         EnqueueEvent(e.NewSolution, e.ProjectId, InvocationReasons.DocumentAdded, asyncToken);
                         break;
                     case WorkspaceChangeKind.ProjectRemoved:
@@ -298,7 +306,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                         EnqueueEvent(e.OldSolution, e.NewSolution, e.ProjectId, asyncToken);
                         break;
                     default:
-                        throw ExceptionUtilities.Unreachable;
+                        throw ExceptionUtilities.UnexpectedValue(e.Kind);
                 }
             }
 
@@ -307,7 +315,6 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                 switch (e.Kind)
                 {
                     case WorkspaceChangeKind.SolutionAdded:
-                        OnSolutionAdded(e.NewSolution);
                         EnqueueEvent(e.NewSolution, InvocationReasons.DocumentAdded, asyncToken);
                         break;
                     case WorkspaceChangeKind.SolutionRemoved:
@@ -321,34 +328,8 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                         EnqueueEvent(e.OldSolution, e.NewSolution, asyncToken);
                         break;
                     default:
-                        throw ExceptionUtilities.Unreachable;
+                        throw ExceptionUtilities.UnexpectedValue(e.Kind);
                 }
-            }
-
-            private void OnSolutionAdded(Solution solution)
-            {
-                var asyncToken = _listener.BeginAsyncOperation("OnSolutionAdded");
-                _eventProcessingQueue.ScheduleTask(() =>
-                {
-                    var semanticVersionTrackingService = solution.Workspace.Services.GetService<ISemanticVersionTrackingService>();
-                    if (semanticVersionTrackingService != null)
-                    {
-                        semanticVersionTrackingService.LoadInitialSemanticVersions(solution);
-                    }
-                }, _shutdownToken).CompletesAsyncOperation(asyncToken);
-            }
-
-            private void OnProjectAdded(Project project)
-            {
-                var asyncToken = _listener.BeginAsyncOperation("OnProjectAdded");
-                _eventProcessingQueue.ScheduleTask(() =>
-                {
-                    var semanticVersionTrackingService = project.Solution.Workspace.Services.GetService<ISemanticVersionTrackingService>();
-                    if (semanticVersionTrackingService != null)
-                    {
-                        semanticVersionTrackingService.LoadInitialSemanticVersions(project);
-                    }
-                }, _shutdownToken).CompletesAsyncOperation(asyncToken);
             }
 
             private void EnqueueEvent(Solution oldSolution, Solution newSolution, IAsyncToken asyncToken)
@@ -510,7 +491,7 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
                     projectConfigurationChange = projectConfigurationChange.With(InvocationReasons.ProjectParseOptionChanged);
                 }
 
-                if (projectChanges.GetAddedMetadataReferences().Any() || 
+                if (projectChanges.GetAddedMetadataReferences().Any() ||
                     projectChanges.GetAddedProjectReferences().Any() ||
                     projectChanges.GetAddedAnalyzerReferences().Any() ||
                     projectChanges.GetRemovedMetadataReferences().Any() ||
@@ -533,7 +514,14 @@ namespace Microsoft.CodeAnalysis.SolutionCrawler
             private async Task EnqueueWorkItemAsync(Document oldDocument, Document newDocument)
             {
                 var differenceService = newDocument.GetLanguageService<IDocumentDifferenceService>();
-                if (differenceService != null)
+
+                if (differenceService == null)
+                {
+                    // For languages that don't use a Roslyn syntax tree, they don't export a document difference service.
+                    // The whole document should be considered as changed in that case.
+                    await EnqueueWorkItemAsync(newDocument, InvocationReasons.DocumentChanged).ConfigureAwait(false);
+                }
+                else
                 {
                     var differenceResult = await differenceService.GetDifferenceAsync(oldDocument, newDocument, _shutdownToken).ConfigureAwait(false);
 

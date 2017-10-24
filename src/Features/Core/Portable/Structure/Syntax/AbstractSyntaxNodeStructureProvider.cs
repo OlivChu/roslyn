@@ -1,18 +1,19 @@
-// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
+﻿// Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
 using System;
-using System.Collections.Immutable;
 using System.Threading;
+using Microsoft.CodeAnalysis.Options;
+using Microsoft.CodeAnalysis.PooledObjects;
 
 namespace Microsoft.CodeAnalysis.Structure
 {
     internal abstract class AbstractSyntaxNodeStructureProvider<TSyntaxNode> : AbstractSyntaxStructureProvider
         where TSyntaxNode : SyntaxNode
     {
-        public override void CollectBlockSpans(
+        public sealed override void CollectBlockSpans(
             Document document,
             SyntaxNode node,
-            ImmutableArray<BlockSpan>.Builder spans,
+            ArrayBuilder<BlockSpan> spans,
             CancellationToken cancellationToken)
         {
             if (!SupportedInWorkspaceKind(document.Project.Solution.Workspace.Kind))
@@ -20,26 +21,28 @@ namespace Microsoft.CodeAnalysis.Structure
                 return;
             }
 
-            CollectBlockSpans(node, spans, cancellationToken);
+            var options = document.Project.Solution.Options;
+            CollectBlockSpans(node, spans, options, cancellationToken);
         }
 
         public sealed override void CollectBlockSpans(
             Document document,
             SyntaxTrivia trivia,
-            ImmutableArray<BlockSpan>.Builder spans,
+            ArrayBuilder<BlockSpan> spans,
             CancellationToken cancellationToken)
         {
             throw new NotSupportedException();
         }
 
         private void CollectBlockSpans(
-            SyntaxNode node, 
-            ImmutableArray<BlockSpan>.Builder spans,
+            SyntaxNode node,
+            ArrayBuilder<BlockSpan> spans,
+            OptionSet options,
             CancellationToken cancellationToken)
         {
-            if (node is TSyntaxNode)
+            if (node is TSyntaxNode tSyntax)
             {
-                CollectBlockSpans((TSyntaxNode)node, spans, cancellationToken);
+                CollectBlockSpans(tSyntax, spans, options, cancellationToken);
             }
         }
 
@@ -50,6 +53,7 @@ namespace Microsoft.CodeAnalysis.Structure
         }
 
         protected abstract void CollectBlockSpans(
-            TSyntaxNode node, ImmutableArray<BlockSpan>.Builder spans, CancellationToken cancellationToken);
+            TSyntaxNode node, ArrayBuilder<BlockSpan> spans,
+            OptionSet options, CancellationToken cancellationToken);
     }
 }

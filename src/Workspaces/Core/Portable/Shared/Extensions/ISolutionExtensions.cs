@@ -4,26 +4,30 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.PooledObjects;
 using Microsoft.CodeAnalysis.Text;
 
 namespace Microsoft.CodeAnalysis.Shared.Extensions
 {
     internal static partial class ISolutionExtensions
     {
-        public static async Task<IEnumerable<INamespaceSymbol>> GetGlobalNamespacesAsync(
+        public static async Task<ImmutableArray<INamespaceSymbol>> GetGlobalNamespacesAsync(
             this Solution solution,
             CancellationToken cancellationToken)
         {
-            var results = new List<INamespaceSymbol>();
+            var results = ArrayBuilder<INamespaceSymbol>.GetInstance();
 
             foreach (var projectId in solution.ProjectIds)
             {
                 var project = solution.GetProject(projectId);
-                var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
-                results.Add(compilation.Assembly.GlobalNamespace);
+                if (project.SupportsCompilation)
+                {
+                    var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
+                    results.Add(compilation.Assembly.GlobalNamespace);
+                }
             }
 
-            return results;
+            return results.ToImmutableAndFree();
         }
 
         public static IEnumerable<DocumentId> GetChangedDocuments(this Solution newSolution, Solution oldSolution)
