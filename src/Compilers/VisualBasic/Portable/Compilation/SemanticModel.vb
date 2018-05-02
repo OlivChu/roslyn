@@ -4,7 +4,7 @@ Imports System.Collections.Immutable
 Imports System.Runtime.InteropServices
 Imports System.Threading
 Imports Microsoft.CodeAnalysis.PooledObjects
-Imports Microsoft.CodeAnalysis.Semantics
+Imports Microsoft.CodeAnalysis.Operations
 Imports Microsoft.CodeAnalysis.Text
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
@@ -3430,11 +3430,11 @@ _Default:
             Return False
         End Function
 
-        Friend Overrides Sub ComputeDeclarationsInSpan(span As TextSpan, getSymbol As Boolean, builder As List(Of DeclarationInfo), cancellationToken As CancellationToken)
+        Friend Overrides Sub ComputeDeclarationsInSpan(span As TextSpan, getSymbol As Boolean, builder As ArrayBuilder(Of DeclarationInfo), cancellationToken As CancellationToken)
             VisualBasicDeclarationComputer.ComputeDeclarationsInSpan(Me, span, getSymbol, builder, cancellationToken)
         End Sub
 
-        Friend Overrides Sub ComputeDeclarationsInNode(node As SyntaxNode, getSymbol As Boolean, builder As List(Of DeclarationInfo), cancellationToken As CancellationToken, Optional levelsToCompute As Integer? = Nothing)
+        Friend Overrides Sub ComputeDeclarationsInNode(node As SyntaxNode, getSymbol As Boolean, builder As ArrayBuilder(Of DeclarationInfo), cancellationToken As CancellationToken, Optional levelsToCompute As Integer? = Nothing)
             VisualBasicDeclarationComputer.ComputeDeclarationsInNode(Me, node, getSymbol, builder, cancellationToken)
         End Sub
 

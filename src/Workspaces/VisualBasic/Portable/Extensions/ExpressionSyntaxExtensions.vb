@@ -52,10 +52,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Extensions
         End Function
 
         <Extension()>
-        Public Function Parenthesize(expression As ExpressionSyntax) As ParenthesizedExpressionSyntax
-            Return SyntaxFactory.ParenthesizedExpression(expression.WithoutTrivia()) _
-                                .WithTriviaFrom(expression) _
-                                .WithAdditionalAnnotations(Simplifier.Annotation)
+        Public Function Parenthesize(expression As ExpressionSyntax, Optional addSimplifierAnnotation As Boolean = True) As ParenthesizedExpressionSyntax
+            Dim result = SyntaxFactory.ParenthesizedExpression(expression.WithoutTrivia()) _
+                                      .WithTriviaFrom(expression)
+            Return If(addSimplifierAnnotation,
+                      result.WithAdditionalAnnotations(Simplifier.Annotation),
+                      result)
         End Function
 
 
@@ -364,6 +366,12 @@ Namespace Microsoft.CodeAnalysis.VisualBasic.Extensions
 
             End If
 
+            Return False
+        End Function
+
+        <Extension()>
+        Public Function IsInInContext(expression As ExpressionSyntax, semanticModel As SemanticModel, cancellationToken As CancellationToken) As Boolean
+            ' NOTE: VB does not support in parameters. Always return False here.
             Return False
         End Function
 

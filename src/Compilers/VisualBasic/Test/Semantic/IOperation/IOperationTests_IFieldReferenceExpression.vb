@@ -1,6 +1,6 @@
 ﻿' Copyright (c) Microsoft.  All Rights Reserved.  Licensed under the Apache License, Version 2.0.  See License.txt in the project root for license information.
 
-Imports Microsoft.CodeAnalysis.Semantics
+Imports Microsoft.CodeAnalysis.Operations
 Imports Microsoft.CodeAnalysis.Test.Utilities
 Imports Microsoft.CodeAnalysis.VisualBasic.Syntax
 Imports Roslyn.Test.Utilities
@@ -25,9 +25,9 @@ Class C
 End Class]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IOperation:  (OperationKind.None) (Syntax: 'Conditional(field)')
+IOperation:  (OperationKind.None, Type: null) (Syntax: 'Conditional(field)')
   Children(1):
-      IFieldReferenceExpression: C.field As System.String (Static) (OperationKind.FieldReferenceExpression, Type: System.String, Constant: "field") (Syntax: 'field')
+      IFieldReferenceOperation: C.field As System.String (Static) (OperationKind.FieldReference, Type: System.String, Constant: "field") (Syntax: 'field')
         Instance Receiver: 
           null
 ]]>.Value
@@ -50,9 +50,9 @@ Class C
 End Class]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IFieldReferenceExpression: C.i As System.Int32 (OperationKind.FieldReferenceExpression, Type: System.Int32) (Syntax: 'i')
+IFieldReferenceOperation: C.i As System.Int32 (OperationKind.FieldReference, Type: System.Int32) (Syntax: 'i')
   Instance Receiver: 
-    IInstanceReferenceExpression (OperationKind.InstanceReferenceExpression, Type: C, IsImplicit) (Syntax: 'i')
+    IInstanceReferenceOperation (OperationKind.InstanceReference, Type: C, IsImplicit) (Syntax: 'i')
 ]]>.Value
 
             Dim expectedDiagnostics = String.Empty
@@ -73,9 +73,9 @@ Class C
 End Class]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IFieldReferenceExpression: C.i As System.Int32 (OperationKind.FieldReferenceExpression, Type: System.Int32) (Syntax: 'Me.i')
+IFieldReferenceOperation: C.i As System.Int32 (OperationKind.FieldReference, Type: System.Int32) (Syntax: 'Me.i')
   Instance Receiver: 
-    IInstanceReferenceExpression (OperationKind.InstanceReferenceExpression, Type: C) (Syntax: 'Me')
+    IInstanceReferenceOperation (OperationKind.InstanceReference, Type: C) (Syntax: 'Me')
 ]]>.Value
 
             Dim expectedDiagnostics = String.Empty
@@ -98,9 +98,9 @@ Class B
 End Class]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IFieldReferenceExpression: C.i As System.Int32 (OperationKind.FieldReferenceExpression, Type: System.Int32) (Syntax: 'MyBase.i')
+IFieldReferenceOperation: C.i As System.Int32 (OperationKind.FieldReference, Type: System.Int32) (Syntax: 'MyBase.i')
   Instance Receiver: 
-    IInstanceReferenceExpression (OperationKind.InstanceReferenceExpression, Type: C) (Syntax: 'MyBase')
+    IInstanceReferenceOperation (OperationKind.InstanceReference, Type: C) (Syntax: 'MyBase')
 ]]>.Value
 
             Dim expectedDiagnostics = String.Empty
@@ -121,14 +121,161 @@ Class C
 End Class]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IFieldReferenceExpression: C.i As System.Int32 (OperationKind.FieldReferenceExpression, Type: System.Int32) (Syntax: 'MyClass.i')
+IFieldReferenceOperation: C.i As System.Int32 (OperationKind.FieldReference, Type: System.Int32) (Syntax: 'MyClass.i')
   Instance Receiver: 
-    IInstanceReferenceExpression (OperationKind.InstanceReferenceExpression, Type: C) (Syntax: 'MyClass')
+    IInstanceReferenceOperation (OperationKind.InstanceReference, Type: C) (Syntax: 'MyClass')
 ]]>.Value
 
             Dim expectedDiagnostics = String.Empty
 
             VerifyOperationTreeAndDiagnosticsForTest(Of MemberAccessExpressionSyntax)(source, expectedOperationTree, expectedDiagnostics)
         End Sub
+
+        <CompilerTrait(CompilerFeature.IOperation)>
+        <Fact()>
+        Public Sub IFieldReference_SharedField()
+            Dim source = <![CDATA[
+Option Strict On
+Imports System
+
+Module M1
+    Class C1
+        Shared i1 As Integer
+        Shared Sub S2()
+            Dim i2 = i1'BIND:"i1"
+        End Sub
+    End Class
+End Module]]>.Value
+
+            Dim expectedOperationTree = <![CDATA[
+IFieldReferenceOperation: M1.C1.i1 As System.Int32 (Static) (OperationKind.FieldReference, Type: System.Int32) (Syntax: 'i1')
+  Instance Receiver: 
+    null
+]]>.Value
+
+            Dim expectedDiagnostics = String.Empty
+
+            VerifyOperationTreeAndDiagnosticsForTest(Of IdentifierNameSyntax)(source, expectedOperationTree, expectedDiagnostics)
+        End Sub
+
+        <CompilerTrait(CompilerFeature.IOperation)>
+        <Fact()>
+        Public Sub IFieldReference_SharedFieldWithInstanceReceiver()
+            Dim source = <![CDATA[
+Option Strict On
+Imports System
+
+Module M1
+    Class C1
+        Shared i1 As Integer = 1
+        Shared Sub S2()
+            Dim c1Instance As New C1
+            Dim i1 = c1Instance.i1'BIND:"c1Instance.i1"
+        End Sub
+    End Class
+End Module]]>.Value
+
+            Dim expectedOperationTree = <![CDATA[
+IFieldReferenceOperation: M1.C1.i1 As System.Int32 (Static) (OperationKind.FieldReference, Type: System.Int32) (Syntax: 'c1Instance.i1')
+  Instance Receiver: 
+    ILocalReferenceOperation: c1Instance (OperationKind.LocalReference, Type: M1.C1) (Syntax: 'c1Instance')
+]]>.Value
+
+            Dim expectedDiagnostics = <![CDATA[
+BC42025: Access of shared member, constant member, enum member or nested type through an instance; qualifying expression will not be evaluated.
+            Dim i1 = c1Instance.i1'BIND:"c1Instance.i1"
+                     ~~~~~~~~~~~~~
+]]>.Value
+
+            VerifyOperationTreeAndDiagnosticsForTest(Of MemberAccessExpressionSyntax)(source, expectedOperationTree, expectedDiagnostics)
+        End Sub
+
+        <CompilerTrait(CompilerFeature.IOperation)>
+        <Fact()>
+        Public Sub IFieldReference_SharedFieldAccessOnClass()
+            Dim source = <![CDATA[
+Option Strict On
+Imports System
+
+Module M1
+    Class C1
+        Shared i1 As Integer = 1
+        Shared Sub S2()
+            Dim i1 = C1.i1'BIND:"C1.i1"
+        End Sub
+    End Class
+End Module]]>.Value
+
+            Dim expectedOperationTree = <![CDATA[
+IFieldReferenceOperation: M1.C1.i1 As System.Int32 (Static) (OperationKind.FieldReference, Type: System.Int32) (Syntax: 'C1.i1')
+  Instance Receiver: 
+    null
+]]>.Value
+
+            Dim expectedDiagnostics = String.Empty
+
+            VerifyOperationTreeAndDiagnosticsForTest(Of MemberAccessExpressionSyntax)(source, expectedOperationTree, expectedDiagnostics)
+        End Sub
+
+        <CompilerTrait(CompilerFeature.IOperation)>
+        <Fact()>
+        Public Sub IFieldReference_InstanceFieldAccessOnClass()
+            Dim source = <![CDATA[
+Option Strict On
+Imports System
+
+Module M1
+    Class C1
+        Dim i1 As Integer = 1
+        Shared Sub S2()
+            Dim i1 = C1.i1'BIND:"C1.i1"
+        End Sub
+    End Class
+End Module]]>.Value
+
+            Dim expectedOperationTree = <![CDATA[
+IFieldReferenceOperation: M1.C1.i1 As System.Int32 (OperationKind.FieldReference, Type: System.Int32, IsInvalid) (Syntax: 'C1.i1')
+  Instance Receiver: 
+    null
+]]>.Value
+
+            Dim expectedDiagnostics = <![CDATA[
+BC30469: Reference to a non-shared member requires an object reference.
+            Dim i1 = C1.i1'BIND:"C1.i1"
+                     ~~~~~
+]]>.Value
+
+            VerifyOperationTreeAndDiagnosticsForTest(Of MemberAccessExpressionSyntax)(source, expectedOperationTree, expectedDiagnostics)
+        End Sub
+
+        <CompilerTrait(CompilerFeature.IOperation)>
+        <Fact()>
+        Public Sub IFieldReference_StaticFieldReferenceInInitializer_RightHandSide()
+            Dim source = <![CDATA[
+Option Strict On
+Imports System
+
+Module M1
+    Class C1
+        Public Shared i1 As Integer
+        Public i2 As Integer
+    End Class
+
+    Sub S1()
+        Dim a = New C1 With {.i2 = .i1}'BIND:".i1"
+    End Sub
+End Module]]>.Value
+
+            Dim expectedOperationTree = <![CDATA[
+IFieldReferenceOperation: M1.C1.i1 As System.Int32 (Static) (OperationKind.FieldReference, Type: System.Int32) (Syntax: '.i1')
+  Instance Receiver: 
+    null
+]]>.Value
+
+            Dim expectedDiagnostics = String.Empty
+
+            VerifyOperationTreeAndDiagnosticsForTest(Of MemberAccessExpressionSyntax)(source, expectedOperationTree, expectedDiagnostics)
+        End Sub
+
     End Class
 End Namespace

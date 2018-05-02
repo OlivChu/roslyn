@@ -29,9 +29,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf o Is Integer')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf o Is Integer')
   Operand: 
-    ILocalReferenceExpression: o (OperationKind.LocalReferenceExpression, Type: System.Object) (Syntax: 'o')
+    ILocalReferenceOperation: o (OperationKind.LocalReference, Type: System.Object) (Syntax: 'o')
   IsType: System.Int32
 ]]>.Value
 
@@ -60,9 +60,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf o Is IComparable')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf o Is IComparable')
   Operand: 
-    ILocalReferenceExpression: o (OperationKind.LocalReferenceExpression, Type: System.Object) (Syntax: 'o')
+    ILocalReferenceOperation: o (OperationKind.LocalReference, Type: System.Object) (Syntax: 'o')
   IsType: System.IComparable
 ]]>.Value
 
@@ -95,9 +95,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf v Is DayOfWeek')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf v Is DayOfWeek')
   Operand: 
-    ILocalReferenceExpression: v (OperationKind.LocalReferenceExpression, Type: System.ValueType) (Syntax: 'v')
+    ILocalReferenceOperation: v (OperationKind.LocalReference, Type: System.ValueType) (Syntax: 'v')
   IsType: System.DayOfWeek
 ]]>.Value
 
@@ -127,9 +127,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf e Is DayOfWeek')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf e Is DayOfWeek')
   Operand: 
-    ILocalReferenceExpression: e (OperationKind.LocalReferenceExpression, Type: System.Enum) (Syntax: 'e')
+    ILocalReferenceOperation: e (OperationKind.LocalReference, Type: System.Enum) (Syntax: 'e')
   IsType: System.DayOfWeek
 ]]>.Value
 
@@ -161,12 +161,12 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf oT Is TRef')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf oT Is TRef')
   Operand: 
-    IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.Object, IsImplicit) (Syntax: 'TypeOf oT Is TRef')
+    IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.Object, IsImplicit) (Syntax: 'TypeOf oT Is TRef')
       Conversion: CommonConversion (Exists: True, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
       Operand: 
-        ILocalReferenceExpression: oT (OperationKind.LocalReferenceExpression, Type: T) (Syntax: 'oT')
+        ILocalReferenceOperation: oT (OperationKind.LocalReference, Type: T) (Syntax: 'oT')
   IsType: TRef
 ]]>.Value
 
@@ -198,12 +198,12 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf oT Is TVal')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf oT Is TVal')
   Operand: 
-    IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.Object, IsImplicit) (Syntax: 'TypeOf oT Is TVal')
+    IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.Object, IsImplicit) (Syntax: 'TypeOf oT Is TVal')
       Conversion: CommonConversion (Exists: True, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
       Operand: 
-        ILocalReferenceExpression: oT (OperationKind.LocalReferenceExpression, Type: T) (Syntax: 'oT')
+        ILocalReferenceOperation: oT (OperationKind.LocalReference, Type: T) (Syntax: 'oT')
   IsType: TVal
 ]]>.Value
 
@@ -235,12 +235,12 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf vVal Is TRef')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf vVal Is TRef')
   Operand: 
-    IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.Object, IsImplicit) (Syntax: 'TypeOf vVal Is TRef')
+    IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.Object, IsImplicit) (Syntax: 'TypeOf vVal Is TRef')
       Conversion: CommonConversion (Exists: True, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
       Operand: 
-        ILocalReferenceExpression: vVal (OperationKind.LocalReferenceExpression, Type: TVal) (Syntax: 'vVal')
+        ILocalReferenceOperation: vVal (OperationKind.LocalReference, Type: TVal) (Syntax: 'vVal')
   IsType: TRef
 ]]>.Value
 
@@ -272,12 +272,12 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf oT Is String')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf oT Is String')
   Operand: 
-    IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.Object, IsImplicit) (Syntax: 'TypeOf oT Is String')
+    IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.Object, IsImplicit) (Syntax: 'TypeOf oT Is String')
       Conversion: CommonConversion (Exists: True, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
       Operand: 
-        ILocalReferenceExpression: oT (OperationKind.LocalReferenceExpression, Type: T) (Syntax: 'oT')
+        ILocalReferenceOperation: oT (OperationKind.LocalReference, Type: T) (Syntax: 'oT')
   IsType: System.String
 ]]>.Value
 
@@ -305,9 +305,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean, IsInvalid) (Syntax: 'TypeOf obj Is Program')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean, IsInvalid) (Syntax: 'TypeOf obj Is Program')
   Operand: 
-    ILocalReferenceExpression: obj (OperationKind.LocalReferenceExpression, Type: System.Object) (Syntax: 'obj')
+    ILocalReferenceOperation: obj (OperationKind.LocalReference, Type: System.Object) (Syntax: 'obj')
   IsType: Program
 ]]>.Value
 
@@ -341,9 +341,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean, IsInvalid) (Syntax: 'TypeOf s Is AppDomain')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean, IsInvalid) (Syntax: 'TypeOf s Is AppDomain')
   Operand: 
-    ILocalReferenceExpression: s (OperationKind.LocalReferenceExpression, Type: System.String, IsInvalid) (Syntax: 's')
+    ILocalReferenceOperation: s (OperationKind.LocalReference, Type: System.String, IsInvalid) (Syntax: 's')
   IsType: System.AppDomain
 ]]>.Value
 
@@ -375,9 +375,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean, IsInvalid) (Syntax: 'TypeOf s Is Integer')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean, IsInvalid) (Syntax: 'TypeOf s Is Integer')
   Operand: 
-    ILocalReferenceExpression: s (OperationKind.LocalReferenceExpression, Type: System.String, IsInvalid) (Syntax: 's')
+    ILocalReferenceOperation: s (OperationKind.LocalReference, Type: System.String, IsInvalid) (Syntax: 's')
   IsType: System.Int32
 ]]>.Value
 
@@ -410,9 +410,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean, IsInvalid) (Syntax: 'TypeOf i Is String')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean, IsInvalid) (Syntax: 'TypeOf i Is String')
   Operand: 
-    ILocalReferenceExpression: i (OperationKind.LocalReferenceExpression, Type: System.Int32, IsInvalid) (Syntax: 'i')
+    ILocalReferenceOperation: i (OperationKind.LocalReference, Type: System.Int32, IsInvalid) (Syntax: 'i')
   IsType: System.String
 ]]>.Value
 
@@ -480,7 +480,7 @@ End Module
     </file>
 </compilation>
 
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlibAndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40AndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
             CompilationUtils.AssertTheseDiagnostics(compilation,
 <expected>
 BC31430: Expression of type 'TA' can never be of type 'TB'.
@@ -555,7 +555,7 @@ End Module
     </file>
 </compilation>
 
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlibAndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40AndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
 
             CompilationUtils.AssertNoErrors(compilation)
 
@@ -587,9 +587,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf o Is ... terSequence')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf o Is ... terSequence')
   Operand: 
-    ILocalReferenceExpression: o (OperationKind.LocalReferenceExpression, Type: System.Object) (Syntax: 'o')
+    ILocalReferenceOperation: o (OperationKind.LocalReference, Type: System.Object) (Syntax: 'o')
   IsType: System.String
 ]]>.Value
 
@@ -618,9 +618,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf o Is HRESULT')
+IIsTypeOperation (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf o Is HRESULT')
   Operand: 
-    ILocalReferenceExpression: o (OperationKind.LocalReferenceExpression, Type: System.Object) (Syntax: 'o')
+    ILocalReferenceOperation: o (OperationKind.LocalReference, Type: System.Object) (Syntax: 'o')
   IsType: System.Int32
 ]]>.Value
 
@@ -649,9 +649,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (IsNotExpression) (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf o Is ... terSequence')
+IIsTypeOperation (IsNotExpression) (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf o Is ... terSequence')
   Operand: 
-    ILocalReferenceExpression: o (OperationKind.LocalReferenceExpression, Type: System.Object) (Syntax: 'o')
+    ILocalReferenceOperation: o (OperationKind.LocalReference, Type: System.Object) (Syntax: 'o')
   IsType: System.String
 ]]>.Value
 
@@ -680,9 +680,9 @@ Module Program
 End Module]]>.Value
 
             Dim expectedOperationTree = <![CDATA[
-IIsTypeExpression (IsNotExpression) (OperationKind.IsTypeExpression, Type: System.Boolean) (Syntax: 'TypeOf o IsNot HRESULT')
+IIsTypeOperation (IsNotExpression) (OperationKind.IsType, Type: System.Boolean) (Syntax: 'TypeOf o IsNot HRESULT')
   Operand: 
-    ILocalReferenceExpression: o (OperationKind.LocalReferenceExpression, Type: System.Object) (Syntax: 'o')
+    ILocalReferenceOperation: o (OperationKind.LocalReference, Type: System.Object) (Syntax: 'o')
   IsType: System.Int32
 ]]>.Value
 
@@ -732,7 +732,7 @@ End Module
     </file>
 </compilation>
 
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlibAndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40AndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
 
             CompilationUtils.AssertNoErrors(compilation)
 
@@ -832,7 +832,7 @@ End Module
     </file>
 </compilation>
 
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlibAndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40AndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
 
             CompilationUtils.AssertNoErrors(compilation)
 
@@ -877,7 +877,7 @@ End Module
     </file>
 </compilation>
 
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlibAndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40AndVBRuntimeAndReferences(source, , TestOptions.ReleaseExe)
 
             CompilationUtils.AssertNoErrors(compilation)
 
@@ -1104,7 +1104,7 @@ y
         <WorkItem(543781, "http://vstfdevdiv:8080/DevDiv2/DevDiv/_workitems/edit/543781")>
         <Fact()>
         Public Sub TypeParameterWithConstraints02()
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib(
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40(
 <compilation>
     <file name="Program.vb">
 Structure S1
@@ -1180,7 +1180,7 @@ BC31430: Expression of type 'U1' can never be of type 'S2'.
 
         <Fact()>
         Public Sub TypeParameterWithConstraints03()
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib(
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40(
 <compilation>
     <file name="Program.vb">
 Interface I
@@ -1225,7 +1225,7 @@ End Class
 
         <Fact()>
         Public Sub TypeParameterWithConstraints04()
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib(
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40(
 <compilation>
     <file name="Program.vb">
 MustInherit Class A(Of T)
@@ -1258,7 +1258,7 @@ BC31430: Expression of type 'U' can never be of type 'Integer()'.
 
         <Fact()>
         Public Sub TypeParameterWithConstraints05()
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib(
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40(
 <compilation>
     <file name="Program.vb">
 Enum E
@@ -1292,7 +1292,7 @@ BC31430: Expression of type 'U' can never be of type 'E'.
 
         <Fact()>
         Public Sub BC30021ERR_TypeOfRequiresReferenceType1()
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib(
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40(
 <compilation>
     <file name="a.vb">
     Class C
@@ -1317,7 +1317,7 @@ BC30021: 'TypeOf ... Is' requires its left operand to have a reference type, but
         ' supported for type parameter T, regardless of constraints.
         <Fact()>
         Public Sub BC30021ERR_TypeOfRequiresReferenceType1_1()
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib(
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40(
 <compilation>
     <file name="a.vb">
 Interface I
@@ -1349,7 +1349,7 @@ End Class
 
         <Fact()>
         Public Sub BC31430ERR_TypeOfExprAlwaysFalse2()
-            Dim compilation = CompilationUtils.CreateCompilationWithMscorlibAndVBRuntime(
+            Dim compilation = CompilationUtils.CreateCompilationWithMscorlib40AndVBRuntime(
     <compilation name="TypeOfExprAlwaysFalse2">
         <file name="a.vb">
         Module M

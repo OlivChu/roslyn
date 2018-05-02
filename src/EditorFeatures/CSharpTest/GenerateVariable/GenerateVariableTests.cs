@@ -11,6 +11,7 @@ using Microsoft.CodeAnalysis.CSharp.GenerateVariable;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.Diagnostics;
 using Microsoft.CodeAnalysis.Options;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Xunit;
 
@@ -302,6 +303,32 @@ class Class
         Method(ref this.goo);
     }
 }", index: 1);
+        }
+
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateVariable)]
+        public async Task TestGeneratePropertyInIn()
+        {
+            await TestInRegularAndScriptAsync(
+@"
+using System;
+class Class
+{
+    void Method(in int i)
+    {
+        Method(in this.[|goo|]);
+    }
+}",
+@"
+using System;
+class Class
+{
+    public ref readonly int goo => throw new NotImplementedException();
+
+    void Method(in int i)
+    {
+        Method(in this.goo);
+    }
+}", index: 2);
         }
 
         [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsGenerateVariable)]

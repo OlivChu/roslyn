@@ -4,7 +4,7 @@ Imports Microsoft.CodeAnalysis.VisualBasic
 Imports Microsoft.CodeAnalysis.VisualBasic.BoundTreeVisitor
 Imports Microsoft.CodeAnalysis.VisualBasic.Symbols
 
-Namespace Microsoft.CodeAnalysis.Semantics
+Namespace Microsoft.CodeAnalysis.Operations
     Partial Friend NotInheritable Class VisualBasicOperationFactory
         Private Shared Function RewriteQueryLambda(node As BoundQueryLambda) As BoundNode
             ' We rewrite query lambda into regular lambda with 2 passes.
@@ -36,7 +36,7 @@ Namespace Microsoft.CodeAnalysis.Semantics
             Public Overrides Function VisitQueryLambda(node As BoundQueryLambda) As BoundNode
                 LocalRewriter.PopulateRangeVariableMapForQueryLambdaRewrite(node, _rangeVariableMap, inExpressionLambda:=True)
                 Dim rewrittenBody As BoundExpression = VisitExpressionWithStackGuard(node.Expression)
-                Dim rewrittenStatement As BoundStatement = LocalRewriter.CreateReturnStatementForQueryLambdaBody(rewrittenBody, node)
+                Dim rewrittenStatement As BoundStatement = LocalRewriter.CreateReturnStatementForQueryLambdaBody(rewrittenBody, node, hasErrors:=node.LambdaSymbol.ReturnType Is LambdaSymbol.ReturnTypePendingDelegate)
                 LocalRewriter.RemoveRangeVariables(node, _rangeVariableMap)
                 Return LocalRewriter.RewriteQueryLambda(rewrittenStatement, node)
             End Function

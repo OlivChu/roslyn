@@ -27,11 +27,11 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IInvalidExpression (OperationKind.InvalidExpression, Type: ?, IsInvalid) (Syntax: 'Console.WriteLine2()')
+IInvalidOperation (OperationKind.Invalid, Type: ?, IsInvalid) (Syntax: 'Console.WriteLine2()')
   Children(1):
-      IInvalidExpression (OperationKind.InvalidExpression, Type: ?, IsInvalid) (Syntax: 'Console.WriteLine2')
+      IInvalidOperation (OperationKind.Invalid, Type: ?, IsInvalid) (Syntax: 'Console.WriteLine2')
         Children(1):
-            IOperation:  (OperationKind.None) (Syntax: 'Console')
+            IOperation:  (OperationKind.None, Type: null) (Syntax: 'Console')
 ";
             var expectedDiagnostics = new DiagnosticDescription[] {
                 // CS0117: 'Console' does not contain a definition for 'WriteLine2'
@@ -62,9 +62,9 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IInvalidExpression (OperationKind.InvalidExpression, Type: System.Void, IsInvalid) (Syntax: 'F(string.Empty)')
+IInvalidOperation (OperationKind.Invalid, Type: System.Void, IsInvalid) (Syntax: 'F(string.Empty)')
   Children(1):
-      IFieldReferenceExpression: System.String System.String.Empty (Static) (OperationKind.FieldReferenceExpression, Type: System.String, IsInvalid) (Syntax: 'string.Empty')
+      IFieldReferenceOperation: System.String System.String.Empty (Static) (OperationKind.FieldReference, Type: System.String, IsInvalid) (Syntax: 'string.Empty')
         Instance Receiver: 
           null
 ";
@@ -97,9 +97,9 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IInvalidExpression (OperationKind.InvalidExpression, Type: System.Void, IsInvalid) (Syntax: 'F(string.Empty)')
+IInvalidOperation (OperationKind.Invalid, Type: System.Void, IsInvalid) (Syntax: 'F(string.Empty)')
   Children(1):
-      IFieldReferenceExpression: System.String System.String.Empty (Static) (OperationKind.FieldReferenceExpression, Type: System.String) (Syntax: 'string.Empty')
+      IFieldReferenceOperation: System.String System.String.Empty (Static) (OperationKind.FieldReference, Type: System.String) (Syntax: 'string.Empty')
         Instance Receiver: 
           null
 ";
@@ -133,13 +133,12 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IVariableDeclaration (1 variables) (OperationKind.VariableDeclaration, IsInvalid) (Syntax: 'y = x.MissingField')
-  Variables: Local_1: ? y
+IVariableDeclaratorOperation (Symbol: ? y) (OperationKind.VariableDeclarator, Type: null, IsInvalid) (Syntax: 'y = x.MissingField')
   Initializer: 
-    IVariableInitializer (OperationKind.VariableInitializer, IsInvalid) (Syntax: '= x.MissingField')
-      IInvalidExpression (OperationKind.InvalidExpression, Type: ?, IsInvalid) (Syntax: 'x.MissingField')
+    IVariableInitializerOperation (OperationKind.VariableInitializer, Type: null, IsInvalid) (Syntax: '= x.MissingField')
+      IInvalidOperation (OperationKind.Invalid, Type: ?, IsInvalid) (Syntax: 'x.MissingField')
         Children(1):
-            ILocalReferenceExpression: x (OperationKind.LocalReferenceExpression, Type: Program) (Syntax: 'x')
+            ILocalReferenceOperation: x (OperationKind.LocalReference, Type: Program) (Syntax: 'x')
 ";
             var expectedDiagnostics = new DiagnosticDescription[] {
                 // CS1061: 'Program' does not contain a definition for 'MissingField' and no extension method 'MissingField' accepting a first argument of type 'Program' could be found (are you missing a using directive or an assembly reference?)
@@ -172,17 +171,20 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IVariableDeclarationStatement (1 declarations) (OperationKind.VariableDeclarationStatement, IsInvalid) (Syntax: 'string y = x.i1;')
-  IVariableDeclaration (1 variables) (OperationKind.VariableDeclaration, IsInvalid) (Syntax: 'y = x.i1')
-    Variables: Local_1: System.String y
+IVariableDeclarationGroupOperation (1 declarations) (OperationKind.VariableDeclarationGroup, Type: null, IsInvalid) (Syntax: 'string y = x.i1;')
+  IVariableDeclarationOperation (1 declarators) (OperationKind.VariableDeclaration, Type: null, IsInvalid) (Syntax: 'string y = x.i1')
+    Declarators:
+        IVariableDeclaratorOperation (Symbol: System.String y) (OperationKind.VariableDeclarator, Type: null, IsInvalid) (Syntax: 'y = x.i1')
+          Initializer: 
+            IVariableInitializerOperation (OperationKind.VariableInitializer, Type: null, IsInvalid) (Syntax: '= x.i1')
+              IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.String, IsInvalid, IsImplicit) (Syntax: 'x.i1')
+                Conversion: CommonConversion (Exists: False, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
+                Operand: 
+                  IFieldReferenceOperation: System.Int32 Program.i1 (OperationKind.FieldReference, Type: System.Int32, IsInvalid) (Syntax: 'x.i1')
+                    Instance Receiver: 
+                      ILocalReferenceOperation: x (OperationKind.LocalReference, Type: Program, IsInvalid) (Syntax: 'x')
     Initializer: 
-      IVariableInitializer (OperationKind.VariableInitializer, IsInvalid) (Syntax: '= x.i1')
-        IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.String, IsInvalid, IsImplicit) (Syntax: 'x.i1')
-          Conversion: CommonConversion (Exists: False, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
-          Operand: 
-            IFieldReferenceExpression: System.Int32 Program.i1 (OperationKind.FieldReferenceExpression, Type: System.Int32, IsInvalid) (Syntax: 'x.i1')
-              Instance Receiver: 
-                ILocalReferenceExpression: x (OperationKind.LocalReferenceExpression, Type: Program, IsInvalid) (Syntax: 'x')
+      null
 ";
             var expectedDiagnostics = new DiagnosticDescription[] {
                 // CS0029: Cannot implicitly convert type 'int' to 'string'
@@ -218,17 +220,20 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IVariableDeclarationStatement (1 declarations) (OperationKind.VariableDeclarationStatement, IsInvalid) (Syntax: 'Program y = ... ogram)x.i1;')
-  IVariableDeclaration (1 variables) (OperationKind.VariableDeclaration, IsInvalid) (Syntax: 'y = (Program)x.i1')
-    Variables: Local_1: Program y
+IVariableDeclarationGroupOperation (1 declarations) (OperationKind.VariableDeclarationGroup, Type: null, IsInvalid) (Syntax: 'Program y = ... ogram)x.i1;')
+  IVariableDeclarationOperation (1 declarators) (OperationKind.VariableDeclaration, Type: null, IsInvalid) (Syntax: 'Program y = ... rogram)x.i1')
+    Declarators:
+        IVariableDeclaratorOperation (Symbol: Program y) (OperationKind.VariableDeclarator, Type: null, IsInvalid) (Syntax: 'y = (Program)x.i1')
+          Initializer: 
+            IVariableInitializerOperation (OperationKind.VariableInitializer, Type: null, IsInvalid) (Syntax: '= (Program)x.i1')
+              IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: Program, IsInvalid) (Syntax: '(Program)x.i1')
+                Conversion: CommonConversion (Exists: False, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
+                Operand: 
+                  IFieldReferenceOperation: System.Int32 Program.i1 (OperationKind.FieldReference, Type: System.Int32, IsInvalid) (Syntax: 'x.i1')
+                    Instance Receiver: 
+                      ILocalReferenceOperation: x (OperationKind.LocalReference, Type: Program, IsInvalid) (Syntax: 'x')
     Initializer: 
-      IVariableInitializer (OperationKind.VariableInitializer, IsInvalid) (Syntax: '= (Program)x.i1')
-        IConversionExpression (Explicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: Program, IsInvalid) (Syntax: '(Program)x.i1')
-          Conversion: CommonConversion (Exists: False, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
-          Operand: 
-            IFieldReferenceExpression: System.Int32 Program.i1 (OperationKind.FieldReferenceExpression, Type: System.Int32, IsInvalid) (Syntax: 'x.i1')
-              Instance Receiver: 
-                ILocalReferenceExpression: x (OperationKind.LocalReferenceExpression, Type: Program, IsInvalid) (Syntax: 'x')
+      null
 ";
             var expectedDiagnostics = new DiagnosticDescription[] {
                 // CS0030: Cannot convert type 'int' to 'Program'
@@ -263,9 +268,9 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IIncrementOrDecrementExpression (Prefix) (OperationKind.IncrementExpression, Type: System.Object, IsInvalid) (Syntax: '++x')
+IIncrementOrDecrementOperation (Prefix) (OperationKind.Increment, Type: ?, IsInvalid) (Syntax: '++x')
   Target: 
-    ILocalReferenceExpression: x (OperationKind.LocalReferenceExpression, Type: Program, IsInvalid) (Syntax: 'x')
+    ILocalReferenceOperation: x (OperationKind.LocalReference, Type: Program, IsInvalid) (Syntax: 'x')
 ";
             var expectedDiagnostics = new DiagnosticDescription[] {
                 // CS0023: Operator '++' cannot be applied to operand of type 'Program'
@@ -297,18 +302,18 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IBinaryOperatorExpression (BinaryOperatorKind.Add) (OperationKind.BinaryOperatorExpression, Type: ?, IsInvalid) (Syntax: 'x + (y * args.Length)')
+IBinaryOperation (BinaryOperatorKind.Add) (OperationKind.BinaryOperator, Type: ?, IsInvalid) (Syntax: 'x + (y * args.Length)')
   Left: 
-    ILocalReferenceExpression: x (OperationKind.LocalReferenceExpression, Type: Program) (Syntax: 'x')
+    ILocalReferenceOperation: x (OperationKind.LocalReference, Type: Program) (Syntax: 'x')
   Right: 
-    IBinaryOperatorExpression (BinaryOperatorKind.Multiply) (OperationKind.BinaryOperatorExpression, Type: ?, IsInvalid) (Syntax: 'y * args.Length')
+    IBinaryOperation (BinaryOperatorKind.Multiply) (OperationKind.BinaryOperator, Type: ?, IsInvalid) (Syntax: 'y * args.Length')
       Left: 
-        IInvalidExpression (OperationKind.InvalidExpression, Type: ?, IsInvalid) (Syntax: 'y')
+        IInvalidOperation (OperationKind.Invalid, Type: ?, IsInvalid) (Syntax: 'y')
           Children(0)
       Right: 
-        IPropertyReferenceExpression: System.Int32 System.Array.Length { get; } (OperationKind.PropertyReferenceExpression, Type: System.Int32) (Syntax: 'args.Length')
+        IPropertyReferenceOperation: System.Int32 System.Array.Length { get; } (OperationKind.PropertyReference, Type: System.Int32) (Syntax: 'args.Length')
           Instance Receiver: 
-            IParameterReferenceExpression: args (OperationKind.ParameterReferenceExpression, Type: System.String[]) (Syntax: 'args')
+            IParameterReferenceOperation: args (OperationKind.ParameterReference, Type: System.String[]) (Syntax: 'args')
 ";
             var expectedDiagnostics = new DiagnosticDescription[] {
                 // CS0103: The name 'y' does not exist in the current context
@@ -339,15 +344,14 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IVariableDeclaration (1 variables) (OperationKind.VariableDeclaration, IsInvalid) (Syntax: 'x = () => F()')
-  Variables: Local_1: var x
+IVariableDeclaratorOperation (Symbol: var x) (OperationKind.VariableDeclarator, Type: null, IsInvalid) (Syntax: 'x = () => F()')
   Initializer: 
-    IVariableInitializer (OperationKind.VariableInitializer, IsInvalid) (Syntax: '= () => F()')
-      IAnonymousFunctionExpression (Symbol: lambda expression) (OperationKind.AnonymousFunctionExpression, Type: null, IsInvalid) (Syntax: '() => F()')
-        IBlockStatement (1 statements) (OperationKind.BlockStatement, IsInvalid, IsImplicit) (Syntax: 'F()')
-          IExpressionStatement (OperationKind.ExpressionStatement, IsInvalid, IsImplicit) (Syntax: 'F()')
+    IVariableInitializerOperation (OperationKind.VariableInitializer, Type: null, IsInvalid) (Syntax: '= () => F()')
+      IAnonymousFunctionOperation (Symbol: lambda expression) (OperationKind.AnonymousFunction, Type: null, IsInvalid) (Syntax: '() => F()')
+        IBlockOperation (1 statements) (OperationKind.Block, Type: null, IsInvalid, IsImplicit) (Syntax: 'F()')
+          IExpressionStatementOperation (OperationKind.ExpressionStatement, Type: null, IsInvalid, IsImplicit) (Syntax: 'F()')
             Expression: 
-              IInvocationExpression (void Program.F()) (OperationKind.InvocationExpression, Type: System.Void, IsInvalid) (Syntax: 'F()')
+              IInvocationOperation (void Program.F()) (OperationKind.Invocation, Type: System.Void, IsInvalid) (Syntax: 'F()')
                 Instance Receiver: 
                   null
                 Arguments(0)
@@ -381,11 +385,11 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IAnonymousFunctionExpression (Symbol: lambda expression) (OperationKind.AnonymousFunctionExpression, Type: null, IsInvalid) (Syntax: '() => F()')
-  IBlockStatement (1 statements) (OperationKind.BlockStatement, IsInvalid, IsImplicit) (Syntax: 'F()')
-    IExpressionStatement (OperationKind.ExpressionStatement, IsInvalid, IsImplicit) (Syntax: 'F()')
+IAnonymousFunctionOperation (Symbol: lambda expression) (OperationKind.AnonymousFunction, Type: null, IsInvalid) (Syntax: '() => F()')
+  IBlockOperation (1 statements) (OperationKind.Block, Type: null, IsInvalid, IsImplicit) (Syntax: 'F()')
+    IExpressionStatementOperation (OperationKind.ExpressionStatement, Type: null, IsInvalid, IsImplicit) (Syntax: 'F()')
       Expression: 
-        IInvocationExpression (void Program.F()) (OperationKind.InvocationExpression, Type: System.Void, IsInvalid) (Syntax: 'F()')
+        IInvocationOperation (void Program.F()) (OperationKind.Invocation, Type: System.Void, IsInvalid) (Syntax: 'F()')
           Instance Receiver: 
             null
           Arguments(0)
@@ -414,13 +418,13 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IFieldInitializer (Field: System.Int32 Program.x) (OperationKind.FieldInitializer, IsInvalid) (Syntax: '= Program')
-  IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.Int32, IsInvalid, IsImplicit) (Syntax: 'Program')
+IFieldInitializerOperation (Field: System.Int32 Program.x) (OperationKind.FieldInitializer, Type: null, IsInvalid) (Syntax: '= Program')
+  IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.Int32, IsInvalid, IsImplicit) (Syntax: 'Program')
     Conversion: CommonConversion (Exists: False, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
     Operand: 
-      IInvalidExpression (OperationKind.InvalidExpression, Type: Program, IsInvalid, IsImplicit) (Syntax: 'Program')
+      IInvalidOperation (OperationKind.Invalid, Type: Program, IsInvalid, IsImplicit) (Syntax: 'Program')
         Children(1):
-            IOperation:  (OperationKind.None, IsInvalid) (Syntax: 'Program')
+            IOperation:  (OperationKind.None, Type: null, IsInvalid) (Syntax: 'Program')
 ";
             var expectedDiagnostics = new DiagnosticDescription[] {
                 // CS0119: 'Program' is a type, which is not valid in the given context
@@ -448,29 +452,29 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IArrayInitializer (2 elements) (OperationKind.ArrayInitializer, IsInvalid) (Syntax: '{ { { 1, 1  ...  { 2, 2 } }')
+IArrayInitializerOperation (2 elements) (OperationKind.ArrayInitializer, Type: null, IsInvalid) (Syntax: '{ { { 1, 1  ...  { 2, 2 } }')
   Element Values(2):
-      IArrayInitializer (1 elements) (OperationKind.ArrayInitializer, IsInvalid) (Syntax: '{ { 1, 1 } }')
+      IArrayInitializerOperation (1 elements) (OperationKind.ArrayInitializer, Type: null, IsInvalid) (Syntax: '{ { 1, 1 } }')
         Element Values(1):
-            IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.Int32, IsInvalid, IsImplicit) (Syntax: '{ 1, 1 }')
+            IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.Int32, IsInvalid, IsImplicit) (Syntax: '{ 1, 1 }')
               Conversion: CommonConversion (Exists: False, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
               Operand: 
-                IInvalidExpression (OperationKind.InvalidExpression, Type: ?, IsInvalid, IsImplicit) (Syntax: '{ 1, 1 }')
+                IInvalidOperation (OperationKind.Invalid, Type: ?, IsInvalid, IsImplicit) (Syntax: '{ 1, 1 }')
                   Children(1):
-                      IArrayInitializer (2 elements) (OperationKind.ArrayInitializer, IsInvalid) (Syntax: '{ 1, 1 }')
+                      IArrayInitializerOperation (2 elements) (OperationKind.ArrayInitializer, Type: null, IsInvalid) (Syntax: '{ 1, 1 }')
                         Element Values(2):
-                            IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.Object, IsInvalid, IsImplicit) (Syntax: '1')
+                            IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.Object, IsInvalid, IsImplicit) (Syntax: '1')
                               Conversion: CommonConversion (Exists: True, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
                               Operand: 
-                                ILiteralExpression (OperationKind.LiteralExpression, Type: System.Int32, Constant: 1, IsInvalid) (Syntax: '1')
-                            IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.Object, IsInvalid, IsImplicit) (Syntax: '1')
+                                ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1, IsInvalid) (Syntax: '1')
+                            IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.Object, IsInvalid, IsImplicit) (Syntax: '1')
                               Conversion: CommonConversion (Exists: True, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
                               Operand: 
-                                ILiteralExpression (OperationKind.LiteralExpression, Type: System.Int32, Constant: 1, IsInvalid) (Syntax: '1')
-      IArrayInitializer (2 elements) (OperationKind.ArrayInitializer) (Syntax: '{ 2, 2 }')
+                                ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1, IsInvalid) (Syntax: '1')
+      IArrayInitializerOperation (2 elements) (OperationKind.ArrayInitializer, Type: null) (Syntax: '{ 2, 2 }')
         Element Values(2):
-            ILiteralExpression (OperationKind.LiteralExpression, Type: System.Int32, Constant: 2) (Syntax: '2')
-            ILiteralExpression (OperationKind.LiteralExpression, Type: System.Int32, Constant: 2) (Syntax: '2')
+            ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
+            ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
 ";
             var expectedDiagnostics = new DiagnosticDescription[] {
                 // CS0623: Array initializers can only be used in a variable or field initializer. Try using a new expression instead.
@@ -498,25 +502,25 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IArrayCreationExpression (OperationKind.ArrayCreationExpression, Type: X[], IsInvalid) (Syntax: 'new X[Program] { { 1 } }')
+IArrayCreationOperation (OperationKind.ArrayCreation, Type: X[], IsInvalid) (Syntax: 'new X[Program] { { 1 } }')
   Dimension Sizes(1):
-      IInvalidExpression (OperationKind.InvalidExpression, Type: Program, IsInvalid, IsImplicit) (Syntax: 'Program')
+      IInvalidOperation (OperationKind.Invalid, Type: Program, IsInvalid, IsImplicit) (Syntax: 'Program')
         Children(1):
-            IOperation:  (OperationKind.None, IsInvalid) (Syntax: 'Program')
+            IOperation:  (OperationKind.None, Type: null, IsInvalid) (Syntax: 'Program')
   Initializer: 
-    IArrayInitializer (1 elements) (OperationKind.ArrayInitializer, IsInvalid) (Syntax: '{ { 1 } }')
+    IArrayInitializerOperation (1 elements) (OperationKind.ArrayInitializer, Type: null, IsInvalid) (Syntax: '{ { 1 } }')
       Element Values(1):
-          IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: X, IsInvalid, IsImplicit) (Syntax: '{ 1 }')
+          IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: X, IsInvalid, IsImplicit) (Syntax: '{ 1 }')
             Conversion: CommonConversion (Exists: False, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
             Operand: 
-              IInvalidExpression (OperationKind.InvalidExpression, Type: ?, IsInvalid, IsImplicit) (Syntax: '{ 1 }')
+              IInvalidOperation (OperationKind.Invalid, Type: ?, IsInvalid, IsImplicit) (Syntax: '{ 1 }')
                 Children(1):
-                    IArrayInitializer (1 elements) (OperationKind.ArrayInitializer, IsInvalid) (Syntax: '{ 1 }')
+                    IArrayInitializerOperation (1 elements) (OperationKind.ArrayInitializer, Type: null, IsInvalid) (Syntax: '{ 1 }')
                       Element Values(1):
-                          IConversionExpression (Implicit, TryCast: False, Unchecked) (OperationKind.ConversionExpression, Type: System.Object, IsInvalid, IsImplicit) (Syntax: '1')
+                          IConversionOperation (TryCast: False, Unchecked) (OperationKind.Conversion, Type: System.Object, IsInvalid, IsImplicit) (Syntax: '1')
                             Conversion: CommonConversion (Exists: True, IsIdentity: False, IsNumeric: False, IsReference: False, IsUserDefined: False) (MethodSymbol: null)
                             Operand: 
-                              ILiteralExpression (OperationKind.LiteralExpression, Type: System.Int32, Constant: 1, IsInvalid) (Syntax: '1')
+                              ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1, IsInvalid) (Syntax: '1')
 ";
             var expectedDiagnostics = new DiagnosticDescription[] {
                 // CS0246: The type or namespace name 'X' could not be found (are you missing a using directive or an assembly reference?)
@@ -552,8 +556,8 @@ class Program
 }
 ";
             string expectedOperationTree = @"
-IParameterInitializer (Parameter: [System.Int32 p = default(System.Int32)]) (OperationKind.ParameterInitializer, IsInvalid) (Syntax: '= M()')
-  IInvocationExpression (System.Int32 Program.M()) (OperationKind.InvocationExpression, Type: System.Int32, IsInvalid) (Syntax: 'M()')
+IParameterInitializerOperation (Parameter: [System.Int32 p = default(System.Int32)]) (OperationKind.ParameterInitializer, Type: null, IsInvalid) (Syntax: '= M()')
+  IInvocationOperation (System.Int32 Program.M()) (OperationKind.Invocation, Type: System.Int32, IsInvalid) (Syntax: 'M()')
     Instance Receiver: 
       null
     Arguments(0)
@@ -565,6 +569,294 @@ IParameterInitializer (Parameter: [System.Int32 p = default(System.Int32)]) (Ope
             };
 
             VerifyOperationTreeAndDiagnosticsForTest<EqualsValueClauseSyntax>(source, expectedOperationTree, expectedDiagnostics);
+        }
+
+        [Fact]
+        [CompilerTrait(CompilerFeature.IOperation)]
+        [WorkItem(20050, "https://github.com/dotnet/roslyn/issues/20050")]
+        public void BuildsArgumentsOperationsForDuplicateExplicitArguments_Repro()
+        {
+            string source = @"
+public class C
+{
+    void M()
+    {
+        /*<bind>*/string.Format(format: """", format: """")/*</bind>*/;
+    }
+}";
+            string expectedOperationTree = @"
+IInvalidOperation (OperationKind.Invalid, Type: System.String, IsInvalid) (Syntax: 'string.Form ... format: """")')
+  Children(3):
+      IOperation:  (OperationKind.None, Type: null) (Syntax: 'string')
+      ILiteralOperation (OperationKind.Literal, Type: System.String, Constant: """") (Syntax: '""""')
+      ILiteralOperation (OperationKind.Literal, Type: System.String, Constant: """") (Syntax: '""""')
+";
+            VerifyOperationTreeAndDiagnosticsForTest<InvocationExpressionSyntax>(source, expectedOperationTree, expectedDiagnostics: new DiagnosticDescription[]
+            {
+                // file.cs(6,45): error CS1740: Named argument 'format' cannot be specified multiple times
+                //         /*<bind>*/string.Format(format: "", format: "")/*</bind>*/;
+                Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "format").WithArguments("format").WithLocation(6, 45)
+            });
+        }
+
+        [Fact]
+        [CompilerTrait(CompilerFeature.IOperation)]
+        [WorkItem(20050, "https://github.com/dotnet/roslyn/issues/20050")]
+        public void BuildsArgumentsOperationsForDuplicateExplicitArguments_CorrectArgumentsOrder_Methods()
+        {
+            string source = @"
+public class C
+{
+    void N(int a, int b, int c = 4)
+    {
+    }
+
+    void M()
+    {
+        /*<bind>*/N(a: 1, a: 2, b: 3)/*</bind>*/;
+    }
+}";
+            string expectedOperationTree = @"
+IInvalidOperation (OperationKind.Invalid, Type: System.Void, IsInvalid) (Syntax: 'N(a: 1, a: 2, b: 3)')
+  Children(3):
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1) (Syntax: '1')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 3) (Syntax: '3')
+";
+            VerifyOperationTreeAndDiagnosticsForTest<InvocationExpressionSyntax>(source, expectedOperationTree, expectedDiagnostics: new DiagnosticDescription[]
+            {
+                // file.cs(10,27): error CS1740: Named argument 'a' cannot be specified multiple times
+                //         /*<bind>*/N(a: 1, a: 2)/*</bind>*/;
+                Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "a").WithArguments("a").WithLocation(10, 27)
+            });
+        }
+
+        [Fact]
+        [CompilerTrait(CompilerFeature.IOperation)]
+        [WorkItem(20050, "https://github.com/dotnet/roslyn/issues/20050")]
+        public void BuildsArgumentsOperationsForDuplicateExplicitArguments_CorrectArgumentsOrder_Delegates()
+        {
+            string source = @"
+public delegate void D(int a, int b, int c = 4);
+public class C
+{
+    void N(D lambda)
+    {
+        /*<bind>*/lambda(a: 1, a: 2, b: 3)/*</bind>*/;
+    }
+}";
+            string expectedOperationTree = @"
+IInvalidOperation (OperationKind.Invalid, Type: System.Void, IsInvalid) (Syntax: 'lambda(a: 1, a: 2, b: 3)')
+  Children(4):
+      IParameterReferenceOperation: lambda (OperationKind.ParameterReference, Type: D) (Syntax: 'lambda')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1) (Syntax: '1')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 3) (Syntax: '3')
+";
+            VerifyOperationTreeAndDiagnosticsForTest<InvocationExpressionSyntax>(source, expectedOperationTree, expectedDiagnostics: new DiagnosticDescription[]
+            {
+                // file.cs(7,32): error CS1740: Named argument 'a' cannot be specified multiple times
+                //         /*<bind>*/lambda(a: 1, a: 2, b: 3)/*</bind>*/;
+                Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "a").WithArguments("a").WithLocation(7, 32)
+            });
+        }
+
+        [Fact]
+        [CompilerTrait(CompilerFeature.IOperation)]
+        [WorkItem(20050, "https://github.com/dotnet/roslyn/issues/20050")]
+        public void BuildsArgumentsOperationsForDuplicateExplicitArguments_CorrectArgumentsOrder_Indexers_Getter()
+        {
+            string source = @"
+public class C
+{
+    int this[int a, int b, int c = 4]
+    {
+        get => 0;
+    }
+
+    void M()
+    {
+        var result = /*<bind>*/this[a: 1, a: 2, b: 3]/*</bind>*/;
+    }
+}";
+            string expectedOperationTree = @"
+IInvalidOperation (OperationKind.Invalid, Type: System.Int32, IsInvalid) (Syntax: 'this[a: 1, a: 2, b: 3]')
+  Children(4):
+      IInstanceReferenceOperation (OperationKind.InstanceReference, Type: C) (Syntax: 'this')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1) (Syntax: '1')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 3) (Syntax: '3')
+";
+            VerifyOperationTreeAndDiagnosticsForTest<ElementAccessExpressionSyntax>(source, expectedOperationTree, expectedDiagnostics: new DiagnosticDescription[]
+            {
+                // file.cs(11,43): error CS1740: Named argument 'a' cannot be specified multiple times
+                //         var result = /*<bind>*/this[a: 1, a: 2, b: 3]/*</bind>*/;
+                Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "a").WithArguments("a").WithLocation(11, 43)
+            });
+        }
+
+        [Fact]
+        [CompilerTrait(CompilerFeature.IOperation)]
+        [WorkItem(20050, "https://github.com/dotnet/roslyn/issues/20050")]
+        public void BuildsArgumentsOperationsForDuplicateExplicitArguments_CorrectArgumentsOrder_Indexers_Setter()
+        {
+            string source = @"
+public class C
+{
+    int this[int a, int b, int c = 4]
+    {
+        set {}
+    }
+
+    void M()
+    {
+        /*<bind>*/this[a: 1, a: 2, b: 3]/*</bind>*/ = 0;
+    }
+}";
+            string expectedOperationTree = @"
+IInvalidOperation (OperationKind.Invalid, Type: System.Int32, IsInvalid) (Syntax: 'this[a: 1, a: 2, b: 3]')
+  Children(4):
+      IInstanceReferenceOperation (OperationKind.InstanceReference, Type: C) (Syntax: 'this')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1) (Syntax: '1')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 3) (Syntax: '3')
+";
+            VerifyOperationTreeAndDiagnosticsForTest<ElementAccessExpressionSyntax>(source, expectedOperationTree, expectedDiagnostics: new DiagnosticDescription[]
+            {
+                // file.cs(11,30): error CS1740: Named argument 'a' cannot be specified multiple times
+                //         /*<bind>*/this[a: 1, a: 2, b: 3]/*</bind>*/ = 0;
+                Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "a").WithArguments("a").WithLocation(11, 30)
+            });
+        }
+
+        [Fact]
+        [CompilerTrait(CompilerFeature.IOperation)]
+        [WorkItem(20050, "https://github.com/dotnet/roslyn/issues/20050")]
+        public void BuildsArgumentsOperationsForDuplicateExplicitArguments_IncorrectArgumentsOrder_Methods()
+        {
+            string source = @"
+public class C
+{
+    void N(int a, int b, int c = 4)
+    {
+    }
+
+    void M()
+    {
+        /*<bind>*/N(b: 1, a: 2, a: 3)/*</bind>*/;
+    }
+}";
+            string expectedOperationTree = @"
+IInvalidOperation (OperationKind.Invalid, Type: System.Void, IsInvalid) (Syntax: 'N(b: 1, a: 2, a: 3)')
+  Children(3):
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1) (Syntax: '1')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 3) (Syntax: '3')
+";
+            VerifyOperationTreeAndDiagnosticsForTest<InvocationExpressionSyntax>(source, expectedOperationTree, expectedDiagnostics: new DiagnosticDescription[]
+            {
+                // file.cs(10,33): error CS1740: Named argument 'a' cannot be specified multiple times
+                //         /*<bind>*/N(b: 1, a: 2, a: 3)/*</bind>*/;
+                Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "a").WithArguments("a").WithLocation(10, 33)
+            });
+        }
+
+        [Fact]
+        [CompilerTrait(CompilerFeature.IOperation)]
+        [WorkItem(20050, "https://github.com/dotnet/roslyn/issues/20050")]
+        public void BuildsArgumentsOperationsForDuplicateExplicitArguments_IncorrectArgumentsOrder_Delegates()
+        {
+            string source = @"
+public delegate void D(int a, int b, int c = 4);
+public class C
+{
+    void N(D lambda)
+    {
+        /*<bind>*/lambda(b: 1, a: 2, a: 3)/*</bind>*/;
+    }
+}";
+            string expectedOperationTree = @"
+IInvalidOperation (OperationKind.Invalid, Type: System.Void, IsInvalid) (Syntax: 'lambda(b: 1, a: 2, a: 3)')
+  Children(4):
+      IParameterReferenceOperation: lambda (OperationKind.ParameterReference, Type: D) (Syntax: 'lambda')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1) (Syntax: '1')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 3) (Syntax: '3')
+";
+            VerifyOperationTreeAndDiagnosticsForTest<InvocationExpressionSyntax>(source, expectedOperationTree, expectedDiagnostics: new DiagnosticDescription[]
+            {
+                // file.cs(7,38): error CS1740: Named argument 'a' cannot be specified multiple times
+                //         /*<bind>*/lambda(b: 1, a: 2, a: 3)/*</bind>*/;
+                Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "a").WithArguments("a").WithLocation(7, 38)
+            });
+        }
+
+        [Fact]
+        [CompilerTrait(CompilerFeature.IOperation)]
+        [WorkItem(20050, "https://github.com/dotnet/roslyn/issues/20050")]
+        public void BuildsArgumentsOperationsForDuplicateExplicitArguments_IncorrectArgumentsOrder_Indexers_Getter()
+        {
+            string source = @"
+public class C
+{
+    int this[int a, int b, int c = 4]
+    {
+        get => 0;
+    }
+
+    void M()
+    {
+        var result = /*<bind>*/this[b: 1, a: 2, a: 3]/*</bind>*/;
+    }
+}";
+            string expectedOperationTree = @"
+IInvalidOperation (OperationKind.Invalid, Type: System.Int32, IsInvalid) (Syntax: 'this[b: 1, a: 2, a: 3]')
+  Children(4):
+      IInstanceReferenceOperation (OperationKind.InstanceReference, Type: C) (Syntax: 'this')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1) (Syntax: '1')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 3) (Syntax: '3')
+";
+            VerifyOperationTreeAndDiagnosticsForTest<ElementAccessExpressionSyntax>(source, expectedOperationTree, expectedDiagnostics: new DiagnosticDescription[]
+            {
+                // file.cs(11,49): error CS1740: Named argument 'a' cannot be specified multiple times
+                //         var result = /*<bind>*/this[b: 1, a: 2, a: 3]/*</bind>*/;
+                Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "a").WithArguments("a").WithLocation(11, 49)
+            });
+        }
+
+        [Fact]
+        [CompilerTrait(CompilerFeature.IOperation)]
+        [WorkItem(20050, "https://github.com/dotnet/roslyn/issues/20050")]
+        public void BuildsArgumentsOperationsForDuplicateExplicitArguments_IncorrectArgumentsOrder_Indexers_Setter()
+        {
+            string source = @"
+public class C
+{
+    int this[int a, int b, int c = 4]
+    {
+        set {}
+    }
+
+    void M()
+    {
+        /*<bind>*/this[b: 1, a: 2, a: 3]/*</bind>*/ = 0;
+    }
+}";
+            string expectedOperationTree = @"
+IInvalidOperation (OperationKind.Invalid, Type: System.Int32, IsInvalid) (Syntax: 'this[b: 1, a: 2, a: 3]')
+  Children(4):
+      IInstanceReferenceOperation (OperationKind.InstanceReference, Type: C) (Syntax: 'this')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 1) (Syntax: '1')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 2) (Syntax: '2')
+      ILiteralOperation (OperationKind.Literal, Type: System.Int32, Constant: 3) (Syntax: '3')
+";
+            VerifyOperationTreeAndDiagnosticsForTest<ElementAccessExpressionSyntax>(source, expectedOperationTree, expectedDiagnostics: new DiagnosticDescription[]
+            {
+                // file.cs(11,36): error CS1740: Named argument 'a' cannot be specified multiple times
+                //         /*<bind>*/this[b: 1, a: 2, a: 3]/*</bind>*/ = 0;
+                Diagnostic(ErrorCode.ERR_DuplicateNamedArgument, "a").WithArguments("a").WithLocation(11, 36)
+            });
         }
     }
 }

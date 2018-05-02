@@ -7,6 +7,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.CodeStyle;
 using Microsoft.CodeAnalysis.CSharp.InitializeParameter;
 using Microsoft.CodeAnalysis.Editor.CSharp.UnitTests.CodeRefactorings;
+using Microsoft.CodeAnalysis.Test.Utilities;
 using Roslyn.Test.Utilities;
 using Xunit;
 
@@ -885,6 +886,158 @@ class C
         {
             throw new ArgumentNullException(nameof(s));
         }
+    }
+}");
+        }
+
+        [WorkItem(21501, "https://github.com/dotnet/roslyn/issues/21501")]
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsInitializeParameter)]
+        public async Task TestInArrowExpression1()
+        {
+            await TestInRegularAndScript1Async(
+@"
+using System;
+using System.Linq;
+
+class C
+{
+    public int Foo(int[] array[||]) =>
+        array.Where(x => x > 3)
+            .OrderBy(x => x)
+            .Count();
+}",
+@"
+using System;
+using System.Linq;
+
+class C
+{
+    public int Foo(int[] array)
+    {
+        if (array == null)
+        {
+            throw new ArgumentNullException(nameof(array));
+        }
+
+        return array.Where(x => x > 3)
+            .OrderBy(x => x)
+            .Count();
+    }
+}");
+        }
+
+        [WorkItem(21501, "https://github.com/dotnet/roslyn/issues/21501")]
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsInitializeParameter)]
+        public async Task TestInArrowExpression2()
+        {
+            await TestInRegularAndScript1Async(
+@"
+using System;
+using System.Linq;
+
+class C
+{
+    public int Foo(int[] array[||]) /* Bar */ => /* Bar */
+        array.Where(x => x > 3)
+            .OrderBy(x => x)
+            .Count(); /* Bar */
+}",
+@"
+using System;
+using System.Linq;
+
+class C
+{
+    public int Foo(int[] array) /* Bar */
+    {
+        if (array == null)
+        {
+            throw new ArgumentNullException(nameof(array));
+        }
+        /* Bar */
+        return array.Where(x => x > 3)
+            .OrderBy(x => x)
+            .Count(); /* Bar */
+    }
+}");
+        }
+
+        [WorkItem(21501, "https://github.com/dotnet/roslyn/issues/21501")]
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsInitializeParameter)]
+        public async Task TestMissingInArrowExpression1()
+        {
+            await TestMissingInRegularAndScriptAsync(
+@"
+using System;
+using System.Linq;
+
+class C
+{
+    public void Foo(string bar[||]) =>
+#if DEBUG
+        Console.WriteLine(""debug"" + bar);
+#else
+        Console.WriteLine(""release"" + bar);
+#endif
+}");
+        }
+
+        [WorkItem(21501, "https://github.com/dotnet/roslyn/issues/21501")]
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsInitializeParameter)]
+        public async Task TestMissingInArrowExpression2()
+        {
+            await TestMissingInRegularAndScriptAsync(
+@"
+using System;
+using System.Linq;
+
+class C
+{
+    public int Foo(int[] array[||]) =>
+#if DEBUG
+        array.Where(x => x > 3)
+            .OrderBy(x => x)
+            .Count();
+#else
+        array.Where(x => x > 3)
+            .OrderBy(x => x)
+            .Count();
+#endif
+}");
+        }
+
+        [WorkItem(21501, "https://github.com/dotnet/roslyn/issues/21501")]
+        [Fact, Trait(Traits.Feature, Traits.Features.CodeActionsInitializeParameter)]
+        public async Task TestInArrowExpression3()
+        {
+            await TestInRegularAndScript1Async(
+@"
+using System;
+using System.Linq;
+
+class C
+{
+    public void Foo(int[] array[||]) =>
+        array.Where(x => x > 3)
+            .OrderBy(x => x)
+            .Count();
+}",
+@"
+using System;
+using System.Linq;
+
+class C
+{
+    public void Foo(int[] array)
+    {
+        if (array == null)
+        {
+            throw new ArgumentNullException(nameof(array));
+        }
+
+        array.Where(x => x > 3)
+            .OrderBy(x => x)
+            .Count();
     }
 }");
         }
